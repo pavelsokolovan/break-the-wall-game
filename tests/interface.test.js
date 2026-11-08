@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
+import { Game } from "../src/game.js";
 
 // Exercise the real interface module. Canvas and audio require actual browser QA;
 // only those native surfaces are replaced here, not game or interface behavior.
@@ -58,6 +59,49 @@ test("interface starts, moves, launches, pauses, ends, saves and reloads results
     now += 16.667;
     frame(now);
   }
+  // Verify tap actions are distinct from touch dragging and off-paddle taps.
+  let actions = 0,
+    fires = 0;
+  const action = Game.prototype.action,
+    fire = Game.prototype.fire;
+  Game.prototype.action = function () {
+    actions++;
+    return action.call(this);
+  };
+  Game.prototype.fire = function () {
+    fires++;
+    return fire.call(this);
+  };
+  get("game").getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width: 800,
+    height: 640,
+  });
+  const touch = (type, x, y) =>
+    get("game").dispatchEvent(
+      new window.PointerEvent(type, {
+        pointerId: 1,
+        pointerType: "touch",
+        clientX: x,
+        clientY: y,
+      }),
+    );
+  touch("pointerdown", 400, 586);
+  touch("pointerup", 400, 586);
+  assert.equal(actions, 1);
+  touch("pointerdown", 400, 586);
+  touch("pointermove", 500, 586);
+  touch("pointerup", 500, 586);
+  assert.equal(actions, 1);
+  touch("pointerdown", 400, 300);
+  touch("pointerup", 400, 300);
+  assert.equal(actions, 1);
+  const beforeFire = fires;
+  window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "f" }));
+  assert.equal(fires, beforeFire + 1);
+  Game.prototype.action = action;
+  Game.prototype.fire = fire;
   get("legend-button").focus();
   get("legend-button").click();
   assert.equal(get("info-panel").hidden, false);

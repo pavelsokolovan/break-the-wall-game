@@ -133,6 +133,8 @@ const dropNames = {
   multi: "TRIPLE BALL!",
   life: "EXTRA LIFE",
   vest: "VEST · 2 HITS",
+  sticky: "STICKY · 3 CATCHES",
+  bazooka: "BAZOOKA · +5 SHOTS",
 };
 function burst(x, y, color, count = 14) {
   if (!save.motion) return;
@@ -177,6 +179,18 @@ const game = new Game({
         break;
       case "paddle":
         burst(data.x, data.y, "#d3fa65", 5);
+        break;
+      case "stick":
+        toast("BALL HELD · TAP PADDLE TO RELEASE");
+        sound("pickup");
+        break;
+      case "fire":
+        tone(150, 0.14, "sawtooth", 0.025, 0, 60);
+        burst(data.x, data.y, "#ffb570", 8);
+        break;
+      case "intercept":
+        sound("explosion");
+        burst(data.x, data.y, "#ffb570", 25);
         break;
       case "pickup":
         toast(dropNames[data.type]);
@@ -337,7 +351,7 @@ $("mobile-pause").onclick = pause;
 $("launch").onclick = () => {
   audio();
   if (game.state === "title") start();
-  else game.launch();
+  else game.action();
 };
 function settings() {
   $("sound").textContent = save.sound ? "♪ SOUND ON" : "♪ SOUND OFF";
@@ -393,9 +407,11 @@ window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLButtonElement && [" ", "Enter"].includes(e.key))
     return;
   const key = e.key.toLowerCase();
-  if (["arrowleft", "arrowright", " ", "a", "d", "p", "escape"].includes(key))
+  if (
+    ["arrowleft", "arrowright", " ", "a", "d", "f", "p", "escape"].includes(key)
+  )
     e.preventDefault();
-  if (e.repeat && [" ", "p", "escape"].includes(key)) return;
+  if (e.repeat && [" ", "f", "p", "escape"].includes(key)) return;
   keys.add(key);
   if (key === " ") {
     audio();
@@ -406,7 +422,11 @@ window.addEventListener("keydown", (e) => {
     )
       start();
     else if (game.state === "clear") $("primary").click();
-    else game.launch();
+    else game.action();
+  }
+  if (key === "f") {
+    audio();
+    game.fire();
   }
   if (key === "p" || key === "escape") pause();
 });
@@ -427,11 +447,38 @@ canvas.addEventListener("pointermove", (e) => {
   if (e.pointerType === "mouse" || canvas.hasPointerCapture(e.pointerId))
     pointer(e);
 });
+let paddleTap;
 canvas.addEventListener("pointerdown", (e) => {
   audio();
+  const r = canvas.getBoundingClientRect(),
+    x = ((e.clientX - r.left) / r.width) * W,
+    y = ((e.clientY - r.top) / r.height) * H;
+  paddleTap = {
+    id: e.pointerId,
+    x: e.clientX,
+    y: e.clientY,
+    time: performance.now(),
+    onPad:
+      Math.abs(x - game.paddle.x) <= game.paddle.w / 2 + 16 &&
+      y >= PADDLE_Y - 26 &&
+      y <= PADDLE_Y + 36,
+  };
   pointer(e);
   canvas.setPointerCapture(e.pointerId);
-  if (e.pointerType === "mouse") game.launch();
+  if (e.pointerType === "mouse" && game.state === "ready") game.launch();
+});
+canvas.addEventListener("pointerup", (e) => {
+  if (
+    paddleTap?.id === e.pointerId &&
+    paddleTap.onPad &&
+    Math.hypot(e.clientX - paddleTap.x, e.clientY - paddleTap.y) < 12 &&
+    performance.now() - paddleTap.time < 500
+  )
+    game.action();
+  paddleTap = null;
+});
+canvas.addEventListener("pointercancel", () => {
+  paddleTap = null;
 });
 function rect(x, y, w, h, color) {
   ctx.fillStyle = color;
@@ -506,6 +553,8 @@ const icons = {
   life: "♥",
   bomb: "✹",
   vest: "V",
+  sticky: "U",
+  bazooka: "B",
 };
 function draw() {
   ctx.clearRect(0, 0, W, H);
@@ -602,6 +651,13 @@ function draw() {
         rect(d.x - 1, d.y - 1, 2, 11, "#573b36");
         rect(d.x - 6, d.y + 3, 4, 4, "#be6b35");
         rect(d.x + 2, d.y + 3, 4, 4, "#be6b35");
+      } else if (d.type === "bazooka") {
+        rect(d.x - 7, d.y - 8, 14, 7, "#ffb570");
+        rect(d.x - 3, d.y - 1, 6, 10, "#ffb570");
+      } else if (d.type === "sticky") {
+        rect(d.x - 8, d.y - 8, 5, 16, "#b38aff");
+        rect(d.x + 3, d.y - 8, 5, 16, "#b38aff");
+        rect(d.x - 8, d.y + 4, 16, 5, "#b38aff");
       } else if (d.type === "multi") {
         for (const [dx, dy] of [
           [-6, 4],
@@ -612,6 +668,10 @@ function draw() {
       } else label(icons[d.type], d.x, d.y + 6, color, 19);
     }
   }
+  for (const shot of game.shots) {
+    rect(shot.x - 4, shot.y - 10, 8, 17, "#ffe7ad");
+    rect(shot.x - 3, shot.y + 7, 6, 10, "#ff7695");
+  }
   const p = game.paddle;
   ctx.shadowColor = "#d3fa65";
   ctx.shadowBlur = save.motion ? 16 : 0;
@@ -620,6 +680,14 @@ function draw() {
   rect(p.x - p.w / 2 + 4, PADDLE_Y + 3, p.w - 8, 3, "#f3ffc4");
   rect(p.x - p.w / 2, PADDLE_Y, 10, 18, "#88b73f");
   rect(p.x + p.w / 2 - 10, PADDLE_Y, 10, 18, "#88b73f");
+  if (game.ammo > 0) {
+    rect(p.x - 8, PADDLE_Y - 21, 16, 22, "#ffb570");
+    rect(p.x - 11, PADDLE_Y - 24, 22, 7, "#e1e5db");
+    rect(p.x - 5, PADDLE_Y - 21, 10, 5, "#32304b");
+  }
+  if (game.stickyCharges > 0) {
+    rect(p.x - p.w / 2 + 10, PADDLE_Y, p.w - 20, 3, "#b38aff");
+  }
   if (game.vestCharges > 0) {
     for (let k = 0; k < game.vestCharges; k++)
       rect(p.x - 14 + k * 18, PADDLE_Y + 5, 12, 9, "#be6b35");
@@ -661,6 +729,15 @@ function draw() {
   if (game.vestCharges > 0) {
     label(`VEST ${game.vestCharges}`, 32, H - 13, "#ffb570", 10, "left");
     x = 120;
+  }
+  for (const [text, color] of [
+    [game.ammo > 0 ? `AMMO ${game.ammo}` : "", "#ffb570"],
+    [game.stickyCharges > 0 ? `STICK ${game.stickyCharges}` : "", "#b38aff"],
+  ]) {
+    if (text) {
+      label(text, x, H - 13, color, 10, "left");
+      x += text.length * 7 + 24;
+    }
   }
   for (const [key, value] of Object.entries(game.powers)) {
     if (value > 0) {
@@ -729,6 +806,14 @@ function frame(now) {
       persist();
     }
   }
+  $("launch").textContent =
+    game.state === "ready"
+      ? "↑ LAUNCH BALL"
+      : game.balls.some((b) => b.stuck)
+        ? "↑ RELEASE / FIRE"
+        : game.ammo > 0
+          ? `↑ FIRE (${game.ammo})`
+          : "↑ LAUNCH BALL";
   $("best").textContent = String(save.best).padStart(6, "0");
   $("level").textContent = `${String(game.level).padStart(2, "0")} / 10`;
   $("lives").textContent =

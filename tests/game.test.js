@@ -32,11 +32,14 @@ test("seeded generator is repeatable; item probabilities and bomb cap have corre
     b = seeded(3);
   for (let i = 0; i < 100; i++) assert.equal(a(), b());
   assert.deepEqual(
-    [0.1, 0.62, 0.72, 0.77, 0.83, 0.86, 0.9, 0.91, 0.94, 0.96, 0.98].map((n) =>
-      dropType(n, false),
-    ),
+    [
+      0.1, 0.56, 0.59, 0.62, 0.72, 0.77, 0.83, 0.86, 0.9, 0.91, 0.94, 0.96,
+      0.98,
+    ].map((n) => dropType(n, false)),
     [
       null,
+      "sticky",
+      "bazooka",
       "gem",
       "wide",
       "slow",
@@ -357,4 +360,135 @@ test("rocket descends fastest, worm weaves, hazards freeze on pause, and full ha
   for (const roll of [0.95, 0.97, 0.99])
     assert.equal(dropType(roll, true), null);
   assert.deepEqual([...HAZARDS], ["bomb", "rocket", "worm"]);
+});
+
+test("sticky ball follows paddle until release; releases upward with no immediate recatch", () => {
+  const g = playing();
+  g.catchDrop({ type: "sticky" });
+  g.balls = [
+    { x: 400, y: PADDLE_Y - 11, r: 10, vx: 0, vy: g.speed(), trail: [] },
+  ];
+  g.update(1 / 120);
+  assert.equal(g.balls[0].stuck, true);
+  assert.equal(g.stickyCharges, 2);
+  g.move(600);
+  for (let i = 0; i < 30; i++) g.update(1 / 120);
+  assert.equal(g.balls[0].x, g.paddle.x);
+  assert.equal(g.balls[0].vy, 0);
+  g.action();
+  assert.equal(g.balls[0].stuck, false);
+  assert(g.balls[0].vy < 0);
+  g.update(1 / 120);
+  assert.equal(g.balls[0].stuck, false);
+  assert.equal(g.stickyCharges, 2);
+});
+test("all held multiballs release together and remain valid when wide paddle expires", () => {
+  const g = playing();
+  g.catchDrop({ type: "multi" });
+  g.catchDrop({ type: "wide" });
+  g.update(0.01);
+  for (const [i, b] of g.balls.entries()) {
+    b.stuck = true;
+    b.offset = (i - 1) * 110;
+    b.vx = 0;
+    b.vy = 0;
+  }
+  g.powers.wide = 0;
+  g.update(0.01);
+  for (const b of g.balls)
+    assert(Math.abs(b.x - g.paddle.x) <= g.paddle.w / 2 - b.r);
+  g.action();
+  assert(g.balls.every((b) => !b.stuck && b.vy < 0));
+  assert.equal(g.lives, 3);
+});
+test("bazooka pickup stocks ammo, caps storage, obeys cooldown, and fires with release", () => {
+  const g = playing();
+  for (let i = 0; i < 4; i++) g.catchDrop({ type: "bazooka" });
+  assert.equal(g.ammo, 15);
+  g.balls[0].stuck = true;
+  g.balls[0].offset = 0;
+  g.action();
+  assert.equal(g.ammo, 14);
+  assert.equal(g.shots.length, 1);
+  assert.equal(g.balls[0].stuck, false);
+  assert.equal(g.fire(), false);
+  g.update(0.26);
+  assert.equal(g.fire(), true);
+  assert.equal(g.ammo, 13);
+  g.state = "paused";
+  const before = JSON.stringify(g);
+  g.update(2);
+  assert.equal(JSON.stringify(g), before);
+  assert.equal(g.fire(), false);
+});
+test("bazooka intercepts bombs rockets and worms for points without player damage", () => {
+  for (const type of HAZARDS) {
+    const g = playing();
+    g.catchDrop({ type: "bazooka" });
+    g.fire();
+    g.drops = [{ type, x: 400, y: 500 }];
+    g.updateShots(0.15);
+    assert.equal(g.drops.length, 0);
+    assert.equal(g.shots.length, 0);
+    assert.equal(g.score, 100);
+    assert.equal(g.lives, 3);
+  }
+});
+test("bazooka damages armor, detonates explosive chains, and steel stops shots", () => {
+  for (const [type, hp] of [
+    ["armored", 2],
+    ["steel", Infinity],
+  ]) {
+    const g = playing();
+    g.bricks = [
+      { x: 380, y: 300, w: 86, h: 32, type, hp, maxHp: hp, r: 0, c: 0 },
+    ];
+    g.catchDrop({ type: "bazooka" });
+    g.fire();
+    g.updateShots(0.5);
+    assert.equal(g.bricks[0].hp, type === "steel" ? Infinity : 1);
+    assert.equal(g.shots.length, 0);
+    assert.equal(g.score, 0);
+  }
+  const g = playing();
+  g.bricks = [
+    { x: 380, y: 300, w: 86, h: 32, type: "explosive", hp: 1, r: 0, c: 0 },
+    { x: 474, y: 300, w: 86, h: 32, type: "standard", hp: 1, r: 0, c: 1 },
+  ];
+  g.catchDrop({ type: "bazooka" });
+  g.fire();
+  g.updateShots(0.5);
+  assert(g.bricks.every((b) => b.hp === 0));
+  assert.equal(g.score, 250);
+});
+test("weapons reset on life loss and level clear; last brick shot safely wins over hazards", () => {
+  const g = playing();
+  g.catchDrop({ type: "bazooka" });
+  g.catchDrop({ type: "sticky" });
+  g.fire();
+  g.lose("miss");
+  assert.equal(g.ammo, 0);
+  assert.equal(g.stickyCharges, 0);
+  assert.equal(g.shots.length, 0);
+  g.launch();
+  g.bricks = [
+    {
+      x: 380,
+      y: PADDLE_Y - 40,
+      w: 86,
+      h: 10,
+      type: "standard",
+      hp: 1,
+      r: 0,
+      c: 0,
+    },
+  ];
+  g.catchDrop({ type: "bazooka" });
+  g.fire();
+  g.drops = [{ type: "bomb", x: 400, y: PADDLE_Y - 10 }];
+  g.update(0.01);
+  assert.equal(g.state, "clear");
+  assert.equal(g.lives, 2);
+  assert.equal(g.ammo, 0);
+  assert.equal(g.shots.length, 0);
 });

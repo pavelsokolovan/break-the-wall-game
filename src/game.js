@@ -108,7 +108,9 @@ export function paddleBounce(offset, velocity) {
   return angle;
 }
 export function dropType(roll, hazardsFull) {
-  if (roll < 0.62) return null;
+  if (roll < 0.56) return null;
+  if (roll < 0.59) return "sticky";
+  if (roll < 0.62) return "bazooka";
   if (roll < 0.72) return "gem";
   if (roll < 0.77) return "wide";
   if (roll < 0.83) return "slow";
@@ -134,6 +136,10 @@ export class Game {
     this.lives = 3;
     this.paddle = { x: W / 2, w: 160, target: W / 2, vx: 0 };
     this.vestCharges = 0;
+    this.stickyCharges = 0;
+    this.ammo = 0;
+    this.shots = [];
+    this.shotCooldown = 0;
     this.powers = {};
     this.damage = 0;
     this.combo = 0;
@@ -168,6 +174,10 @@ export class Game {
     this.paddle.target = W / 2;
     this.paddle.vx = 0;
     this.vestCharges = 0;
+    this.stickyCharges = 0;
+    this.ammo = 0;
+    this.shots = [];
+    this.shotCooldown = 0;
     this.balls = [
       { x: W / 2, y: PADDLE_Y - 12, r: 10, vx: 0, vy: 0, trail: [] },
     ];
@@ -198,6 +208,68 @@ export class Game {
     this.balls[0].vx = Math.sin(a) * s;
     this.balls[0].vy = -Math.cos(a) * s;
     this.event("launch");
+  }
+  releaseHeld() {
+    for (const b of this.balls) {
+      if (!b.stuck) continue;
+      b.stuck = false;
+      const angle = paddleBounce(
+        (b.offset || 0) / (this.paddle.w / 2),
+        this.paddle.vx,
+      );
+      b.vx = Math.sin(angle) * this.speed();
+      b.vy = -Math.cos(angle) * this.speed();
+      b.trail = [];
+      this.event("launch");
+    }
+  }
+  fire() {
+    if (this.state !== "playing" || this.ammo <= 0 || this.shotCooldown > 0)
+      return false;
+    this.ammo--;
+    this.shotCooldown = 0.25;
+    this.shots.push({ x: this.paddle.x, y: PADDLE_Y - 24, r: 5 });
+    this.event("fire", { x: this.paddle.x, y: PADDLE_Y - 24 });
+    return true;
+  }
+  action() {
+    if (this.state === "ready") this.launch();
+    if (this.state !== "playing") return;
+    this.releaseHeld();
+    this.fire();
+  }
+  updateShots(dt) {
+    const steps = Math.max(1, Math.ceil((720 * dt) / 4));
+    for (const shot of this.shots) {
+      for (let i = 0; i < steps && !shot.dead; i++) {
+        shot.y -= (720 * dt) / steps;
+        const hazard = this.drops.find(
+          (d) =>
+            HAZARDS.has(d.type) &&
+            circleRect(shot, {
+              x: d.x - (d.type === "worm" ? 24 : 11),
+              y: d.y - (d.type === "rocket" ? 18 : 11),
+              w: d.type === "worm" ? 48 : 22,
+              h: d.type === "rocket" ? 36 : 22,
+            }),
+        );
+        if (hazard) {
+          this.drops = this.drops.filter((d) => d !== hazard);
+          this.score += 100;
+          shot.dead = true;
+          this.event("intercept", { x: hazard.x, y: hazard.y });
+          break;
+        }
+        const brick = this.bricks.find((b) => b.hp > 0 && circleRect(shot, b));
+        if (brick) {
+          this.hitBrick(brick);
+          shot.dead = true;
+          break;
+        }
+        if (shot.y < -20) shot.dead = true;
+      }
+    }
+    this.shots = this.shots.filter((s) => !s.dead);
   }
   hitBrick(brick) {
     if (brick.hp <= 0 || brick.type === "steel") return;
@@ -242,6 +314,12 @@ export class Game {
   }
   catchDrop(d) {
     switch (d.type) {
+      case "sticky":
+        this.stickyCharges = 3;
+        break;
+      case "bazooka":
+        this.ammo = Math.min(15, this.ammo + 5);
+        break;
       case "gem":
         this.score += 500;
         this.stats.gems++;
@@ -335,6 +413,7 @@ export class Game {
       return;
     }
     this.elapsed += dt;
+    this.shotCooldown = Math.max(0, this.shotCooldown - dt);
     this.comboTimer = Math.max(0, this.comboTimer - dt);
     if (!this.comboTimer) this.combo = 0;
     this.noHit += dt;
@@ -345,6 +424,16 @@ export class Game {
       sub = dt / steps;
     for (let j = 0; j < steps; j++)
       for (const b of this.balls) {
+        if (b.stuck) {
+          b.offset = Math.max(
+            -this.paddle.w / 2 + b.r,
+            Math.min(this.paddle.w / 2 - b.r, b.offset || 0),
+          );
+          b.x = this.paddle.x + b.offset;
+          b.y = PADDLE_Y - b.r - 1;
+          b.trail = [];
+          continue;
+        }
         const norm = Math.hypot(b.vx, b.vy) || 1,
           speed = this.speed();
         b.vx = (b.vx / norm) * speed;
@@ -384,6 +473,16 @@ export class Game {
           b.y = PADDLE_Y - b.r - 1;
           this.returns++;
           this.event("paddle", { x: b.x, y: b.y });
+          if (this.stickyCharges > 0) {
+            this.stickyCharges--;
+            b.stuck = true;
+            b.offset = b.x - this.paddle.x;
+            b.vx = 0;
+            b.vy = 0;
+            b.trail = [];
+            this.event("stick");
+            continue;
+          }
         }
         for (const brick of this.bricks) {
           if (brick.hp <= 0 || !circleRect(b, brick)) continue;
@@ -398,6 +497,7 @@ export class Game {
           break;
         }
       }
+    this.updateShots(dt);
     if (!this.bricks.some((b) => b.hp > 0 && b.type !== "steel")) {
       const bonus =
         1000 * this.level +
@@ -407,6 +507,10 @@ export class Game {
       this.drops = [];
       this.powers = {};
       this.vestCharges = 0;
+      this.stickyCharges = 0;
+      this.ammo = 0;
+      this.shots = [];
+      this.shotCooldown = 0;
       if (this.level === 10) {
         this.state = "victory";
         this.event("end", { win: true, bonus });
