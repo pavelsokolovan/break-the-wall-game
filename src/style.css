@@ -936,3 +936,114 @@ main {
     font-size: 10px;
   }
 }
+/* Game-first layout; details are available on demand. */
+.arcade-layout {
+  display: block;
+  max-width: 900px;
+  margin: auto;
+}
+.game-tools {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.overlay-card {
+  max-width: 90%;
+}
+.overlay-card .eyebrow,
+.overlay-foot {
+  display: none;
+}
+.overlay h2 {
+  font-size: 22px;
+  margin-bottom: 24px;
+}
+.primary {
+  min-width: 180px;
+}
+.info-panel[hidden] {
+  display: none;
+}
+.info-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #050510df;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.info-card {
+  width: min(100%, 520px);
+  max-height: 85dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #121121;
+  border: 3px solid #514368;
+  box-shadow: 6px 6px #000;
+  padding: 24px;
+  font:
+    20px/1.35 "VT323",
+    monospace;
+}
+.info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.info-heading h2 {
+  font:
+    14px "Press Start 2P",
+    monospace;
+  margin: 0;
+  color: var(--lime);
+}
+.info-card .drops li > span {
+  font-size: 18px;
+}
+.info-card .drops small {
+  font:
+    17px/1.3 "VT323",
+    monospace;
+}
+.info-card #records li {
+  font-size: 22px;
+}
+.info-card #best {
+  color: var(--lime);
+  font-size: 30px;
+}
+@media (max-width: 700px) {
+  .shell {
+    padding: 0 10px;
+  }
+  header {
+    height: 65px;
+  }
+  main {
+    padding-top: 10px;
+  }
+  .overlay h2 {
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 18px;
+  }
+  .primary {
+    padding: 12px 16px;
+  }
+  .info-card {
+    padding: 18px;
+  }
+  .info-panel {
+    padding: 12px;
+  }
+  .hud {
+    padding-bottom: 10px;
+  }
+  .touch-controls {
+    padding-top: 10px;
+  }
+}

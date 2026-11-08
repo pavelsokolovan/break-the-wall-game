@@ -58,6 +58,30 @@ test("interface starts, moves, launches, pauses, ends, saves and reloads results
     now += 16.667;
     frame(now);
   }
+  get("legend-button").focus();
+  get("legend-button").click();
+  assert.equal(get("info-panel").hidden, false);
+  assert.equal(get("scores-content").hidden, true);
+  assert.equal(get("legend-content").hidden, false);
+  assert.equal(doc.querySelector(".shell").inert, true);
+  assert.equal(doc.activeElement, get("close-info"));
+  const modalScore = get("score").textContent;
+  for (let i = 0; i < 100; i++) {
+    now += 16.667;
+    frame(now);
+  }
+  assert.equal(get("score").textContent, modalScore);
+  window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Tab" }));
+  assert.equal(doc.activeElement, get("close-info"));
+  window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
+  assert.equal(get("info-panel").hidden, true);
+  assert.equal(get("overlay").hidden, true);
+  assert.equal(doc.querySelector(".shell").inert, false);
+  assert.equal(doc.activeElement, get("legend-button"));
+  get("scores-button").click();
+  assert.equal(get("scores-content").hidden, false);
+  assert.equal(get("legend-content").hidden, true);
+  get("close-info").click();
   get("pause").click();
   assert.equal(get("overlay-title").textContent, "ON A BREAK.");
   const score = get("score").textContent;

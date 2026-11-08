@@ -19,17 +19,18 @@ https://pavelsokolovan.github.io/break-the-wall-game/
 
 Hit near the paddle edges to aim diagonally. Clear every breakable brick to advance. Steel bricks are indestructible. Armored bricks need two hits; reinforced bricks need three. Orange explosive bricks damage adjacent bricks and trigger chains.
 
-Start with three lives. Missing the last ball or catching an unshielded bomb costs one life and shortens the 160-pixel paddle by 20 pixels, down to a 100-pixel minimum, and adds 12% ball speed (up to 36%). Each new level repairs the paddle and clears the speed penalty. Power-ups disappear on life loss or level completion.
+Start with three lives. Missing the last ball or catching an unprotected bomb, rocket, or worm costs one life and shortens the 160-pixel paddle by 20 pixels, down to a 100-pixel minimum, and adds 12% ball speed (up to 36%). Each new level repairs the paddle and clears the speed penalty. Power-ups disappear on life loss or level completion.
 
 | Drop | Effect |
 | --- | --- |
 | Gem | +500 points |
 | Wide | 50% wider paddle for 12 seconds |
 | Slow | 35% slower balls for 10 seconds |
-| Shield | Absorb one bomb within 15 seconds |
+| Shield | Absorb one hazard hit within 15 seconds |
+| Vest | Absorb two hazard hits; lasts until consumed, life loss, or level clear |
 | Multiball | Up to three balls |
 | Heart | Extra life, maximum five; +1,000 points at the cap |
-| Bomb | Lose a life and damage the paddle unless shielded |
+| Bomb / rocket / worm | Bombs fall; rockets dive faster; worms weave sideways. An unprotected hit costs a life |
 
 Destroy bricks within two seconds to build a combo, up to ×4. Clearing a level awards 1,000 × level + 500 × remaining lives. Clearing without damage adds 2,000 points.
 
@@ -69,3 +70,9 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) and [GAME_DESIGN.md](GAME_DESIGN.md) for more
 Brick visuals distinguish masonry, bolted armor, reinforced plates, dynamite, and riveted steel. Bricks measure 86 × 32 pixels and balls have a 10-pixel radius in the 800 × 640 playfield. Multiball drops have a 4% chance per destroyed brick, and slow-ball drops have a 6% chance.
 
 The compact header shows the full game name and a sound toggle. Motion effects follow the device’s reduced-motion preference automatically.
+
+Scores and the legend open from buttons beneath the game. Opening a panel freezes the run; closing it returns to the previous playing or paused state. The main screen shows only score, level, lives, and controls.
+
+Paddle strokes transfer lateral momentum at contact: slow or stationary movement keeps position-based aiming; faster strokes push the rebound in the stroke direction. Paddle speed is measured from actual clamped travel, capped at 1,200 pixels/second; the ball retains its current speed and a safe upward angle. Keyboard and touch/mouse use the same collision model.
+
+Current drop odds: none 62%, gem 10%, wide 5%, slow 6%, shield 3%, multiball 4%, life 1%, vest 3%, bomb 2%, rocket 2%, worm 2%. At most three hazards fall at once. Shield is consumed before vest armor; simultaneous armor pickups are resolved before hazard hits. Armor cannot prevent losing the last ball.

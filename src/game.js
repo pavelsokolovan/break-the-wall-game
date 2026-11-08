@@ -96,15 +96,30 @@ export function circleRect(ball, rect) {
   const y = Math.max(rect.y, Math.min(ball.y, rect.y + rect.h));
   return (ball.x - x) ** 2 + (ball.y - y) ** 2 <= ball.r ** 2;
 }
-export function dropType(roll, bombExists) {
-  if (roll < 0.68) return null;
-  if (roll < 0.78) return "gem";
-  if (roll < 0.83) return "wide";
-  if (roll < 0.89) return "slow";
-  if (roll < 0.92) return "shield";
-  if (roll < 0.96) return "multi";
-  if (roll < 0.97) return "life";
-  return bombExists ? null : "bomb";
+export const HAZARDS = new Set(["bomb", "rocket", "worm"]);
+export function paddleBounce(offset, velocity) {
+  let angle = Math.max(-1.13, Math.min(1.13, offset * 1.13));
+  if (Math.abs(angle) < 0.26) angle = 0.26 * (angle < 0 ? -1 : 1);
+  // Slow strokes keep contact-position aiming; fast strokes transfer lateral momentum.
+  const stroke =
+    (Math.sign(velocity) * Math.max(0, Math.abs(velocity) - 80)) / 1120;
+  angle = Math.max(-1.13, Math.min(1.13, angle + stroke * 0.9));
+  if (Math.abs(angle) < 0.12) angle = 0.12 * (angle < 0 ? -1 : 1);
+  return angle;
+}
+export function dropType(roll, hazardsFull) {
+  if (roll < 0.62) return null;
+  if (roll < 0.72) return "gem";
+  if (roll < 0.77) return "wide";
+  if (roll < 0.83) return "slow";
+  if (roll < 0.86) return "shield";
+  if (roll < 0.9) return "multi";
+  if (roll < 0.91) return "life";
+  if (roll < 0.94) return "vest";
+  if (hazardsFull) return null;
+  if (roll < 0.96) return "bomb";
+  if (roll < 0.98) return "rocket";
+  return "worm";
 }
 export class Game {
   constructor({ random = Math.random, event = () => {} } = {}) {
@@ -117,7 +132,8 @@ export class Game {
     this.level = 1;
     this.score = 0;
     this.lives = 3;
-    this.paddle = { x: W / 2, w: 160 };
+    this.paddle = { x: W / 2, w: 160, target: W / 2, vx: 0 };
+    this.vestCharges = 0;
     this.powers = {};
     this.damage = 0;
     this.combo = 0;
@@ -149,6 +165,9 @@ export class Game {
     this.returns = 0;
     this.paddle.w = this.baseWidth();
     this.paddle.x = W / 2;
+    this.paddle.target = W / 2;
+    this.paddle.vx = 0;
+    this.vestCharges = 0;
     this.balls = [
       { x: W / 2, y: PADDLE_Y - 12, r: 10, vx: 0, vy: 0, trail: [] },
     ];
@@ -166,7 +185,7 @@ export class Game {
     );
   }
   move(x) {
-    this.paddle.x = Math.max(
+    this.paddle.target = Math.max(
       this.paddle.w / 2 + 4,
       Math.min(W - this.paddle.w / 2 - 4, x),
     );
@@ -200,7 +219,7 @@ export class Game {
     this.event("brick", { ...brick, points, combo: this.combo, mult });
     const type = dropType(
       this.random(),
-      this.drops.some((d) => d.type === "bomb"),
+      this.drops.filter((d) => HAZARDS.has(d.type)).length >= 3,
     );
     if (type)
       this.drops.push({
@@ -233,6 +252,9 @@ export class Game {
       case "slow":
         this.powers.slow = 10;
         break;
+      case "vest":
+        this.vestCharges = 2;
+        break;
       case "shield":
         this.powers.shield = 15;
         break;
@@ -261,10 +283,17 @@ export class Game {
         }
         break;
       }
+      case "rocket":
+      case "worm":
       case "bomb":
         if (this.powers.shield > 0) {
           this.powers.shield = 0;
           this.event("shield");
+          return false;
+        }
+        if (this.vestCharges > 0) {
+          this.vestCharges--;
+          this.event("vest-block", { charges: this.vestCharges });
           return false;
         }
         return true;
@@ -277,7 +306,10 @@ export class Game {
     this.lives--;
     this.damage = Math.min(3, this.damage + 1);
     this.levelLosses++;
-    if (reason === "bomb") this.stats.bombs++;
+    if (HAZARDS.has(reason)) {
+      const key = reason === "bomb" ? "bombs" : reason + "s";
+      this.stats[key] = (this.stats[key] || 0) + 1;
+    }
     this.event("damage", { reason });
     if (this.lives <= 0) {
       this.state = "over";
@@ -288,7 +320,15 @@ export class Game {
     if (!["ready", "playing"].includes(this.state)) return;
     if (direction) this.move(this.paddle.x + direction * 720 * dt);
     this.paddle.w = this.baseWidth() * (this.powers.wide > 0 ? 1.5 : 1);
-    this.move(this.paddle.x);
+    this.move(this.paddle.target);
+    const oldX = this.paddle.x;
+    const travel = Math.max(
+      -1200 * dt,
+      Math.min(1200 * dt, this.paddle.target - oldX),
+    );
+    this.paddle.x += travel;
+    const velocity = dt > 0 ? travel / dt : 0;
+    this.paddle.vx = velocity;
     if (this.state === "ready") {
       this.balls[0].x = this.paddle.x;
       this.balls[0].y = PADDLE_Y - 12;
@@ -335,8 +375,10 @@ export class Game {
           h: 18,
         };
         if (b.vy > 0 && py <= PADDLE_Y && circleRect(b, p)) {
-          let a = ((b.x - this.paddle.x) / (this.paddle.w / 2)) * 1.13;
-          if (Math.abs(a) < 0.26) a = 0.26 * (a < 0 ? -1 : 1);
+          const a = paddleBounce(
+            (b.x - this.paddle.x) / (this.paddle.w / 2),
+            this.paddle.vx,
+          );
           b.vx = Math.sin(a) * speed;
           b.vy = -Math.cos(a) * speed;
           b.y = PADDLE_Y - b.r - 1;
@@ -364,6 +406,7 @@ export class Game {
       this.score += bonus;
       this.drops = [];
       this.powers = {};
+      this.vestCharges = 0;
       if (this.level === 10) {
         this.state = "victory";
         this.event("end", { win: true, bonus });
@@ -380,22 +423,29 @@ export class Game {
     this.balls = this.balls.filter((b) => b.y < H + 20);
     const caught = [];
     for (const d of this.drops) {
-      d.y += 150 * dt;
+      d.age = (d.age || 0) + dt;
+      d.baseX ??= d.x;
+      d.y += (d.type === "rocket" ? 260 : d.type === "worm" ? 110 : 150) * dt;
+      if (d.type === "worm")
+        d.x = Math.max(
+          24,
+          Math.min(W - 24, d.baseX + Math.sin(d.age * 6) * 55),
+        );
+      const halfW = d.type === "worm" ? 24 : 11,
+        halfH = d.type === "rocket" ? 18 : 11;
       if (
-        d.y + 11 >= PADDLE_Y &&
-        d.y - 11 <= PADDLE_Y + 18 &&
-        Math.abs(d.x - this.paddle.x) < this.paddle.w / 2 + 11
+        d.y + halfH >= PADDLE_Y &&
+        d.y - halfH <= PADDLE_Y + 18 &&
+        Math.abs(d.x - this.paddle.x) < this.paddle.w / 2 + halfW
       )
         caught.push(d);
     }
-    caught.sort(
-      (a, b) =>
-        (a.type === "shield" ? -2 : a.type === "bomb" ? 2 : 0) -
-        (b.type === "shield" ? -2 : b.type === "bomb" ? 2 : 0),
-    );
-    let bomb = false;
-    for (const d of caught) bomb = this.catchDrop(d) || bomb;
+    const priority = (d) =>
+      ["shield", "vest"].includes(d.type) ? -1 : HAZARDS.has(d.type) ? 1 : 0;
+    caught.sort((a, b) => priority(a) - priority(b));
+    let hazard = null;
+    for (const d of caught) if (this.catchDrop(d)) hazard ||= d.type;
     this.drops = this.drops.filter((d) => !caught.includes(d) && d.y < H + 30);
-    if (bomb || !this.balls.length) this.lose(bomb ? "bomb" : "miss");
+    if (hazard || !this.balls.length) this.lose(hazard || "miss");
   }
 }

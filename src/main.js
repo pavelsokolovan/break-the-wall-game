@@ -132,6 +132,7 @@ const dropNames = {
   shield: "SHIELD · 15s",
   multi: "TRIPLE BALL!",
   life: "EXTRA LIFE",
+  vest: "VEST · 2 HITS",
 };
 function burst(x, y, color, count = 14) {
   if (!save.motion) return;
@@ -182,15 +183,20 @@ const game = new Game({
         burst(data.x, PADDLE_Y, "#c49aff", 20);
         break;
       case "shield":
-        toast("SHIELD ABSORBED THE BOMB");
+        toast("SHIELD BLOCKED THE HIT");
         burst(game.paddle.x, PADDLE_Y, "#66dfd1", 35);
+        break;
+      case "vest-block":
+        toast(`VEST · ${data.charges} HITS LEFT`);
+        sound("shield");
+        burst(game.paddle.x, PADDLE_Y, "#ffb570", 25);
         break;
       case "damage":
         shake = save.motion ? 13 : 0;
         flash = 0.3;
         toast(
-          data.reason === "bomb"
-            ? "BOMB HIT · SPEED +12%"
+          data.reason !== "miss"
+            ? `${data.reason.toUpperCase()} HIT · SPEED +12%`
             : "BALL LOST · SPEED +12%",
         );
         break;
@@ -198,7 +204,7 @@ const game = new Game({
         showOverlay(
           "WALL DEMOLISHED",
           `LEVEL ${String(game.level).padStart(2, "0")} CLEAR`,
-          `${game.bricks.shape || THEMES[game.level - 1]} complete.\n+${data.bonus.toLocaleString()} bonus points\nPaddle repaired and speed reset on the next level.`,
+          `+${data.bonus.toLocaleString()} points`,
           "NEXT LEVEL ↗",
           "Score saved. Keep the streak alive.",
         );
@@ -217,6 +223,7 @@ function showOverlay(kicker, title, copy, button, foot = "") {
   $("overlay-kicker").textContent = kicker;
   $("overlay-title").textContent = title;
   $("overlay-copy").textContent = copy;
+  $("overlay-copy").hidden = !copy;
   $("primary").textContent = button;
   $("overlay-foot").textContent = foot;
   $("secondary").hidden = !["paused", "over", "victory"].includes(game.state);
@@ -275,16 +282,17 @@ function start() {
   popups = [];
   game.start();
   hideOverlay();
-  toast("MOVE THE PADDLE · SPACE OR TAP LAUNCH");
 }
 function pause() {
   if (["playing", "ready"].includes(game.state)) {
     game.beforePause = game.state;
     game.state = "paused";
+    game.paddle.vx = 0;
+    game.paddle.target = game.paddle.x;
     showOverlay(
       "TAKE A BREATHER",
       "ON A BREAK.",
-      `Score: ${game.score.toLocaleString()}\nYour ball, timers, and powers are frozen.`,
+      "",
       "BACK TO THE BLITZ ↗",
       "P / ESC TO RESUME",
     );
@@ -318,8 +326,8 @@ $("secondary").onclick = () => {
   game.state = "title";
   showOverlay(
     "INSERT A LITTLE COURAGE",
-    "READY TO BREAK IT?",
-    "Ten walls stand between you and glory.\nOne ball is all it takes.",
+    "BREAK THE WALL",
+    "",
     "LET’S PLAY ↗",
     "← → MOVE / SPACE TO LAUNCH",
   );
@@ -342,8 +350,46 @@ $("sound").onclick = () => {
   settings();
   if (save.sound) sound("pickup");
 };
+const panel = $("info-panel");
+let panelSource,
+  panelWasActive = false;
+function openInfo(kind) {
+  panelSource = document.activeElement;
+  panelWasActive = ["ready", "playing"].includes(game.state);
+  if (panelWasActive) pause();
+  keys.clear();
+  $("legend-content").hidden = kind !== "legend";
+  $("scores-content").hidden = kind !== "scores";
+  $("info-title").textContent = kind === "legend" ? "LEGEND" : "SCORES";
+  panel.hidden = false;
+  document.querySelector(".shell").inert = true;
+  $("close-info").focus();
+}
+function closeInfo() {
+  panel.hidden = true;
+  document.querySelector(".shell").inert = false;
+  if (panelWasActive && game.state === "paused") pause();
+  panelSource?.focus({ preventScroll: true });
+}
+$("legend-button").onclick = () => openInfo("legend");
+$("scores-button").onclick = () => openInfo("scores");
+$("close-info").onclick = closeInfo;
+panel.onclick = (e) => {
+  if (e.target === panel) closeInfo();
+};
 const keys = new Set();
 window.addEventListener("keydown", (e) => {
+  if (!panel.hidden) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeInfo();
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      $("close-info").focus();
+    }
+    return;
+  }
   if (e.target instanceof HTMLButtonElement && [" ", "Enter"].includes(e.key))
     return;
   const key = e.key.toLowerCase();
@@ -459,6 +505,7 @@ const icons = {
   multi: "···",
   life: "♥",
   bomb: "✹",
+  vest: "V",
 };
 function draw() {
   ctx.clearRect(0, 0, W, H);
@@ -490,22 +537,6 @@ function draw() {
   ctx.save();
   if (shake > 0 && save.motion)
     ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-  label(
-    `SECTOR ${String(game.level).padStart(2, "0")} / ${game.bricks.shape || THEMES[game.level - 1]}`,
-    32,
-    36,
-    "#77718c",
-    10,
-    "left",
-  );
-  label(
-    `SPEED ${Math.round(game.speed())} / ${game.balls.length} BALLS`,
-    W - 32,
-    36,
-    "#77718c",
-    10,
-    "right",
-  );
   for (const b of game.bricks) drawBrick(b);
   if (game.combo >= 5) {
     label(
@@ -525,8 +556,32 @@ function draw() {
           ? "#d3fa65"
           : d.type === "gem"
             ? "#c49aff"
-            : "#66dfd1";
-    if (d.type === "bomb") {
+            : d.type === "vest"
+              ? "#ffb570"
+              : "#66dfd1";
+    if (d.type === "rocket") {
+      rect(d.x - 7, d.y - 15, 14, 28, "#ff7695");
+      rect(d.x - 4, d.y + 13, 8, 5, "#d7f2ff");
+      rect(d.x - 13, d.y - 10, 6, 12, "#b38aff");
+      rect(d.x + 7, d.y - 10, 6, 12, "#b38aff");
+      rect(
+        d.x - 4,
+        d.y - 23,
+        8,
+        8,
+        Math.sin(t * 30) > 0 ? "#ffb570" : "#fff0ae",
+      );
+    } else if (d.type === "worm") {
+      for (let k = 0; k < 5; k++)
+        rect(
+          d.x - 24 + k * 10,
+          d.y + Math.sin(t * 10 + k) * 4 - 5,
+          10,
+          10,
+          k === 4 ? "#ffb570" : "#ff7695",
+        );
+      rect(d.x + 19, d.y + Math.sin(t * 10 + 4) * 4 - 3, 3, 3, "#191827");
+    } else if (d.type === "bomb") {
       rect(d.x - 9, d.y - 9, 18, 18, "#ff7695");
       rect(d.x - 5, d.y - 13, 10, 4, "#ffb570");
       rect(
@@ -540,7 +595,14 @@ function draw() {
     } else {
       rect(d.x - 12, d.y - 12, 24, 24, color);
       rect(d.x - 10, d.y - 10, 20, 20, "#17162b");
-      if (d.type === "multi") {
+      if (d.type === "vest") {
+        rect(d.x - 8, d.y - 8, 5, 7, color);
+        rect(d.x + 3, d.y - 8, 5, 7, color);
+        rect(d.x - 8, d.y - 1, 16, 11, color);
+        rect(d.x - 1, d.y - 1, 2, 11, "#573b36");
+        rect(d.x - 6, d.y + 3, 4, 4, "#be6b35");
+        rect(d.x + 2, d.y + 3, 4, 4, "#be6b35");
+      } else if (d.type === "multi") {
         for (const [dx, dy] of [
           [-6, 4],
           [6, 4],
@@ -558,6 +620,10 @@ function draw() {
   rect(p.x - p.w / 2 + 4, PADDLE_Y + 3, p.w - 8, 3, "#f3ffc4");
   rect(p.x - p.w / 2, PADDLE_Y, 10, 18, "#88b73f");
   rect(p.x + p.w / 2 - 10, PADDLE_Y, 10, 18, "#88b73f");
+  if (game.vestCharges > 0) {
+    for (let k = 0; k < game.vestCharges; k++)
+      rect(p.x - 14 + k * 18, PADDLE_Y + 5, 12, 9, "#be6b35");
+  }
   if (game.powers.shield > 0) {
     ctx.strokeStyle = "#66dfd1";
     ctx.lineWidth = 2;
@@ -592,6 +658,10 @@ function draw() {
     label("CLICK / SPACE / TAP LAUNCH", W / 2, 500, "#d3fa65", 12);
   }
   let x = 32;
+  if (game.vestCharges > 0) {
+    label(`VEST ${game.vestCharges}`, 32, H - 13, "#ffb570", 10, "left");
+    x = 120;
+  }
   for (const [key, value] of Object.entries(game.powers)) {
     if (value > 0) {
       const text = `${key.toUpperCase()} ${Math.ceil(value)}s`;

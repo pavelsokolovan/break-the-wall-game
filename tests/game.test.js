@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Game, makeLevel, dropType, seeded, PADDLE_Y } from "../src/game.js";
+import {
+  Game,
+  makeLevel,
+  dropType,
+  seeded,
+  PADDLE_Y,
+  paddleBounce,
+  HAZARDS,
+} from "../src/game.js";
 function playing() {
   const g = new Game({ random: () => 0 });
   g.start();
@@ -24,10 +32,22 @@ test("seeded generator is repeatable; item probabilities and bomb cap have corre
     b = seeded(3);
   for (let i = 0; i < 100; i++) assert.equal(a(), b());
   assert.deepEqual(
-    [0.1, 0.68, 0.78, 0.83, 0.89, 0.92, 0.96, 0.97].map((n) =>
+    [0.1, 0.62, 0.72, 0.77, 0.83, 0.86, 0.9, 0.91, 0.94, 0.96, 0.98].map((n) =>
       dropType(n, false),
     ),
-    [null, "gem", "wide", "slow", "shield", "multi", "life", "bomb"],
+    [
+      null,
+      "gem",
+      "wide",
+      "slow",
+      "shield",
+      "multi",
+      "life",
+      "vest",
+      "bomb",
+      "rocket",
+      "worm",
+    ],
   );
   assert.equal(dropType(0.99, true), null);
 });
@@ -249,4 +269,92 @@ test("failures accelerate balls, slow pickups reduce speed without stacking, and
   assert.equal(g.speed(), baseline * 1.24);
   g.nextLevel();
   assert.equal(g.speed(), baseline);
+});
+
+test("paddle stroke preserves slow aiming and scales lateral influence in both directions", () => {
+  assert.equal(paddleBounce(0.4, 0), paddleBounce(0.4, 60));
+  assert(paddleBounce(0.4, 400) > paddleBounce(0.4, 0));
+  assert(paddleBounce(0.4, 1000) > paddleBounce(0.4, 400));
+  assert(paddleBounce(-0.4, -1000) < paddleBounce(-0.4, -400));
+  assert(paddleBounce(-0.2, 1200) > 0);
+  for (const v of [-1200, 0, 1200])
+    for (const offset of [-1.2, 0, 1.2]) {
+      const a = paddleBounce(offset, v);
+      assert(Math.abs(a) <= 1.13);
+      assert(Math.cos(a) > 0.4);
+    }
+});
+test("actual paddle movement transfers momentum on contact, stops at walls, and keeps ball speed", () => {
+  for (const direction of [-1, 1]) {
+    const g = playing();
+    g.move(400 + direction * 200);
+    g.balls = [
+      { x: 400, y: PADDLE_Y - 11, r: 10, vx: 0, vy: g.speed(), trail: [] },
+    ];
+    g.update(1 / 120);
+    assert(Math.sign(g.balls[0].vx) === direction);
+    assert(g.balls[0].vy < 0);
+    assert(
+      Math.abs(Math.hypot(g.balls[0].vx, g.balls[0].vy) - g.speed()) < 0.01,
+    );
+    g.move(direction > 0 ? 10000 : -10000);
+    for (let i = 0; i < 100; i++) g.update(1 / 120);
+    assert.equal(g.paddle.vx, 0);
+    assert(g.paddle.x >= g.paddle.w / 2 && g.paddle.x <= 800 - g.paddle.w / 2);
+  }
+});
+test("vest blocks exactly two hazard hits; shield is consumed first and armor does not save a missed ball", () => {
+  const g = playing();
+  g.catchDrop({ type: "vest" });
+  assert.equal(g.vestCharges, 2);
+  assert.equal(g.catchDrop({ type: "rocket" }), false);
+  assert.equal(g.vestCharges, 1);
+  g.catchDrop({ type: "shield" });
+  assert.equal(g.catchDrop({ type: "worm" }), false);
+  assert.equal(g.vestCharges, 1);
+  assert.equal(g.catchDrop({ type: "worm" }), false);
+  assert.equal(g.vestCharges, 0);
+  assert.equal(g.catchDrop({ type: "bomb" }), true);
+  g.catchDrop({ type: "vest" });
+  g.balls[0].y = 700;
+  g.update(1 / 120);
+  assert.equal(g.lives, 2);
+  assert.equal(g.vestCharges, 0);
+});
+test("vest collected with simultaneous hazards protects in the same step and failures cost at most one life", () => {
+  const g = playing();
+  g.drops = ["rocket", "vest", "bomb"].map((type) => ({
+    type,
+    x: 400,
+    y: PADDLE_Y - 10,
+  }));
+  g.update(1 / 120);
+  assert.equal(g.lives, 3);
+  assert.equal(g.vestCharges, 0);
+  g.drops = ["bomb", "rocket", "worm"].map((type) => ({
+    type,
+    x: 400,
+    y: PADDLE_Y - 10,
+  }));
+  g.update(1 / 120);
+  assert.equal(g.lives, 2);
+});
+test("rocket descends fastest, worm weaves, hazards freeze on pause, and full hazard slots suppress spawns", () => {
+  const g = playing();
+  g.drops = ["bomb", "rocket", "worm"].map((type) => ({
+    type,
+    x: 100,
+    y: 100,
+  }));
+  g.update(0.1);
+  assert(g.drops[1].y > g.drops[0].y);
+  assert(g.drops[0].y > g.drops[2].y);
+  assert.notEqual(g.drops[2].x, 100);
+  const before = JSON.stringify(g.drops);
+  g.state = "paused";
+  g.update(2);
+  assert.equal(JSON.stringify(g.drops), before);
+  for (const roll of [0.95, 0.97, 0.99])
+    assert.equal(dropType(roll, true), null);
+  assert.deepEqual([...HAZARDS], ["bomb", "rocket", "worm"]);
 });
