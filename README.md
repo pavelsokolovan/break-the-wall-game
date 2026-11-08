@@ -15,7 +15,7 @@ https://pavelsokolovan.github.io/break-the-wall-game/
 | Move paddle | Mouse, ← / →, A / D | Drag in the game field |
 | Launch ball | Click or Space | Launch Ball button |
 | Pause / resume | P, Escape, or pause button | Pause button |
-| Sound / reduced effects | Header buttons | Header buttons |
+| Sound | Header button | Header button |
 
 Hit near the paddle edges to aim diagonally. Clear every breakable brick to advance. Steel bricks are indestructible. Armored bricks need two hits; reinforced bricks need three. Orange explosive bricks damage adjacent bricks and trigger chains.
 
@@ -33,7 +33,7 @@ Start with three lives. Missing the last ball or catching an unshielded bomb cos
 
 Destroy bricks within two seconds to build a combo, up to ×4. Clearing a level awards 1,000 × level + 500 × remaining lives. Clearing without damage adds 2,000 points.
 
-Best score, the five most recent completed runs, sound settings, and reduced effects settings are stored in this browser's local storage. Results include score, level, win/loss, date, duration, bricks, gems, and bomb hits. No data is sent to a server. Private browsing or clearing site data can remove saved results; unavailable storage falls back to this session. Active runs are not restored after reload.
+Best score, the five most recent completed runs, sound settings are stored in this browser's local storage. Results include score, level, win/loss, date, duration, bricks, gems, and bomb hits. No data is sent to a server. Private browsing or clearing site data can remove saved results; unavailable storage falls back to this session. Active runs are not restored after reload.
 
 ## Develop
 
@@ -67,3 +67,5 @@ Press Start 2P and VT323 pixel fonts are bundled locally under the SIL Open Font
 See [DEPLOYMENT.md](DEPLOYMENT.md) and [GAME_DESIGN.md](GAME_DESIGN.md) for more detail. No license has been selected yet.
 
 Brick visuals distinguish masonry, bolted armor, reinforced plates, dynamite, and riveted steel. Bricks measure 86 × 32 pixels and balls have a 10-pixel radius in the 800 × 640 playfield. Multiball drops have a 4% chance per destroyed brick, and slow-ball drops have a 6% chance.
+
+The compact header shows the full game name and a sound toggle. Motion effects follow the device’s reduced-motion preference automatically.

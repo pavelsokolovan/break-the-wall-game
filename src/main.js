@@ -20,10 +20,7 @@ function readSave() {
             .slice(0, 5)
         : [],
       sound: s.sound !== false,
-      motion:
-        typeof s.motion === "boolean"
-          ? s.motion
-          : !matchMedia("(prefers-reduced-motion: reduce)").matches,
+      motion: !matchMedia("(prefers-reduced-motion: reduce)").matches,
     };
   } catch {
     return {
@@ -337,8 +334,6 @@ $("launch").onclick = () => {
 function settings() {
   $("sound").textContent = save.sound ? "♪ SOUND ON" : "♪ SOUND OFF";
   $("sound").setAttribute("aria-pressed", String(save.sound));
-  $("motion").textContent = save.motion ? "✦ FX ON" : "✦ FX OFF";
-  $("motion").setAttribute("aria-pressed", String(!save.motion));
 }
 $("sound").onclick = () => {
   audio();
@@ -346,13 +341,6 @@ $("sound").onclick = () => {
   persist();
   settings();
   if (save.sound) sound("pickup");
-};
-$("motion").onclick = () => {
-  save.motion = !save.motion;
-  particles = [];
-  shake = 0;
-  persist();
-  settings();
 };
 const keys = new Set();
 window.addEventListener("keydown", (e) => {

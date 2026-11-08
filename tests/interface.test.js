@@ -81,11 +81,9 @@ test("interface starts, moves, launches, pauses, ends, saves and reloads results
     JSON.parse(localStorage.getItem("brickfall-blitz:v1")).sound,
     true,
   );
-  get("motion").click();
-  assert.equal(
-    JSON.parse(localStorage.getItem("brickfall-blitz:v1")).motion,
-    true,
-  );
+  assert.equal(get("motion"), null);
+  assert.equal(doc.querySelector(".intro"), null);
+  assert.equal(doc.querySelector(".game-name").textContent, "Brickfall Blitz");
   // Reinitializing the real module represents a new page using the same storage.
   await import("../src/main.js?reload");
   assert(

@@ -889,3 +889,50 @@ button {
     display: none;
   }
 }
+
+/* Compact title bar keeps the game immediately in view. */
+header {
+  gap: 16px;
+}
+.wordmark {
+  gap: 10px;
+  min-width: 0;
+}
+.game-name {
+  font-family: "Press Start 2P", monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  text-transform: uppercase;
+}
+.header-actions {
+  flex-shrink: 0;
+}
+main {
+  padding-top: 24px;
+}
+@media (max-width: 700px) {
+  header {
+    gap: 8px;
+  }
+  .wordmark {
+    gap: 7px;
+  }
+  .wordmark .logo {
+    font-size: 25px;
+  }
+  .game-name {
+    font-size: 10px;
+  }
+  main {
+    padding-top: 16px;
+  }
+}
+@media (max-width: 360px) {
+  .game-name {
+    font-size: 9px;
+  }
+  .header-actions button {
+    padding: 7px;
+    font-size: 10px;
+  }
+}
