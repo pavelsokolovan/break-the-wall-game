@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0a0a19" />
+    <meta
+      name="description"
+      content="An original pixel arcade brick breaker. Break the wall, catch power-ups, dodge bombs, and chase your local high score."
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+    <title>Brickfall Blitz · Pixel Arcade</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <a class="wordmark" href="./" aria-label="Brickfall Blitz home"
+          ><span class="logo">▦</span> BB<span class="wordmark-sub"
+            >PIXEL ARCADE / VOL. 01</span
+          ></a
+        >
+        <div class="header-actions">
+          <button id="sound" aria-pressed="true">♪ SOUND ON</button
+          ><button id="motion" aria-pressed="false">✦ FX ON</button>
+        </div>
+      </header>
+      <main>
+        <section class="intro">
+          <div>
+            <p class="eyebrow">
+              <span class="live-dot"></span> THE WALL IS WAITING
+            </p>
+            <h1>
+              BRICKFALL<span>BLITZ<span class="title-dot">.</span></span>
+            </h1>
+          </div>
+          <div class="intro-copy">
+            <p>A little paddle. A big problem.</p>
+            <p>
+              Break the wall. Catch the rewards.<br />Try not to catch the
+              bombs.
+            </p>
+            <span class="edition">10 LEVELS · INFINITE SECOND CHANCES</span>
+          </div>
+        </section>
+        <div class="arcade-layout">
+          <section class="cabinet" aria-label="Game cabinet">
+            <div class="hud">
+              <div><span>SCORE</span><strong id="score">000000</strong></div>
+              <div><span>BEST</span><strong id="best">000000</strong></div>
+              <div><span>LEVEL</span><strong id="level">01 / 10</strong></div>
+              <div>
+                <span>LIVES</span
+                ><strong id="lives" class="hearts">♥ ♥ ♥</strong>
+              </div>
+              <button id="pause" aria-label="Pause game">Ⅱ</button>
+            </div>
+            <div class="screen">
+              <canvas
+                id="game"
+                width="800"
+                height="640"
+                aria-label="Brickfall Blitz game field. Move with arrows, A and D, mouse, or touch. Space launches the ball."
+                tabindex="0"
+              ></canvas>
+              <div class="scanlines" aria-hidden="true"></div>
+              <div id="overlay" class="overlay">
+                <div class="overlay-card">
+                  <p id="overlay-kicker" class="eyebrow">
+                    INSERT A LITTLE COURAGE
+                  </p>
+                  <div class="pixel-icon" aria-hidden="true">▦</div>
+                  <h2 id="overlay-title">READY TO<br /><em>BREAK IT?</em></h2>
+                  <p id="overlay-copy">
+                    Ten walls stand between you and glory.<br />One ball is all
+                    it takes.
+                  </p>
+                  <button id="primary" class="primary">
+                    LET’S PLAY <span>↗</span></button
+                  ><button id="secondary" class="secondary" hidden>
+                    BACK TO MENU
+                  </button>
+                  <p id="overlay-foot" class="overlay-foot">
+                    ← → MOVE &nbsp; / &nbsp; SPACE TO LAUNCH
+                  </p>
+                </div>
+              </div>
+              <div id="toast" role="status"></div>
+            </div>
+            <div class="cabinet-bottom">
+              <span><i></i> <span id="status">SYSTEM READY</span></span
+              ><span>60 FPS ENERGY. 8-BIT SOUL.</span>
+            </div>
+            <div class="touch-controls">
+              <button id="launch">↑ LAUNCH BALL</button
+              ><button id="mobile-pause">Ⅱ PAUSE</button>
+            </div>
+          </section>
+          <aside>
+            <section class="side-card mission">
+              <p class="eyebrow">01 / THE MISSION</p>
+              <h2>MAKE SOME<br /><span>SPACE.</span></h2>
+              <p>Keep the ball alive. Clear every brick. Own the next level.</p>
+              <div class="damage-meter">
+                <span>PADDLE INTEGRITY</span
+                ><strong id="integrity">100%</strong>
+              </div>
+              <div class="meter-track"><div id="integrity-bar"></div></div>
+              <p class="small">
+                Miss a ball or catch a bomb and your paddle gets shorter. A new
+                level repairs it.
+              </p>
+            </section>
+            <section class="side-card">
+              <p class="eyebrow">02 / KNOW YOUR DROPS</p>
+              <ul class="drops">
+                <li>
+                  <b class="drop gem">◆</b
+                  ><span>GEM<small>+500 sweet points</small></span>
+                </li>
+                <li>
+                  <b class="drop wide">↔</b
+                  ><span
+                    >POWER-UP<small
+                      >Wide · slow · shield · multiball</small
+                    ></span
+                  >
+                </li>
+                <li>
+                  <b class="drop life">♥</b
+                  ><span>EXTRA LIFE<small>Another chance at glory</small></span>
+                </li>
+                <li>
+                  <b class="drop bomb">✹</b
+                  ><span>BOMB<small>Definitely do not catch this</small></span>
+                </li>
+              </ul>
+            </section>
+            <section class="side-card record">
+              <div class="record-title">
+                <p class="eyebrow">03 / YOUR LAST RUNS</p>
+                <span>LOCAL</span>
+              </div>
+              <ol id="records">
+                <li class="empty">Your next run starts the story.</li>
+              </ol>
+              <p class="small">Saved on this device. No login, just you.</p>
+            </section>
+          </aside>
+        </div>
+        <section class="below">
+          <div><kbd>←</kbd> <kbd>→</kbd><span>or A / D to move</span></div>
+          <div>
+            <kbd>SPACE</kbd><span>launch</span><kbd>P</kbd><span>pause</span>
+          </div>
+          <p>ON MOBILE? DRAG THE PADDLE. TAP LAUNCH.</p>
+        </section>
+      </main>
+      <footer>
+        <span>BUILT FOR THE JOY OF ONE MORE TRY.</span
+        ><span>BRICKFALL BLITZ <b>© 2026</b></span>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

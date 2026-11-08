@@ -1,0 +1,656 @@
+import { Game, W, H, PADDLE_Y, COLORS, THEMES } from "./game.js";
+const $ = (id) => document.getElementById(id),
+  canvas = $("game"),
+  ctx = canvas.getContext("2d");
+const STORE = "brickfall-blitz:v1";
+function readSave() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) || "{}");
+    return {
+      best: Number.isFinite(s.best) && s.best >= 0 ? s.best : 0,
+      runs: Array.isArray(s.runs)
+        ? s.runs
+            .filter(
+              (r) =>
+                r &&
+                Number.isFinite(r.score) &&
+                Number.isFinite(r.level) &&
+                typeof r.win === "boolean",
+            )
+            .slice(0, 5)
+        : [],
+      sound: s.sound !== false,
+      motion:
+        typeof s.motion === "boolean"
+          ? s.motion
+          : !matchMedia("(prefers-reduced-motion: reduce)").matches,
+    };
+  } catch {
+    return {
+      best: 0,
+      runs: [],
+      sound: true,
+      motion: !matchMedia("(prefers-reduced-motion: reduce)").matches,
+    };
+  }
+}
+let save = readSave(),
+  storageOK = true;
+function persist() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(save));
+  } catch {
+    storageOK = false;
+    $("status").textContent = "STORAGE UNAVAILABLE · SESSION ONLY";
+  }
+}
+let ac;
+function audio() {
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume().catch(() => {});
+  } catch {
+    /* Silent play remains available. */
+  }
+}
+function tone(
+  freq,
+  duration = 0.08,
+  type = "square",
+  volume = 0.035,
+  delay = 0,
+  end = freq,
+) {
+  if (!save.sound || !ac) return;
+  try {
+    const o = ac.createOscillator(),
+      g = ac.createGain(),
+      t = ac.currentTime + delay;
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(30, end), t + duration);
+    g.gain.setValueAtTime(volume, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    o.connect(g);
+    g.connect(ac.destination);
+    o.start(t);
+    o.stop(t + duration);
+  } catch {}
+}
+function sound(name) {
+  switch (name) {
+    case "paddle":
+      tone(240, 0.065, "square", 0.025, 0, 500);
+      break;
+    case "brick":
+      tone(650, 0.07, "square", 0.02, 0, 360);
+      break;
+    case "hit":
+      tone(160, 0.045, "triangle");
+      break;
+    case "wall":
+      tone(180, 0.025, "triangle", 0.012);
+      break;
+    case "pickup":
+      [660, 880, 1320].forEach((f, i) =>
+        tone(f, 0.1, "square", 0.025, i * 0.065),
+      );
+      break;
+    case "damage":
+      tone(140, 0.45, "sawtooth", 0.045, 0, 35);
+      break;
+    case "explosion":
+      tone(95, 0.25, "sawtooth", 0.035, 0, 30);
+      break;
+    case "clear":
+    case "end":
+      [523, 659, 784, 1047].forEach((f, i) =>
+        tone(f, 0.25, "square", 0.03, i * 0.12),
+      );
+      break;
+    case "launch":
+      tone(260, 0.12, "square", 0.025, 0, 880);
+      break;
+    case "shield":
+      tone(1300, 0.3, "sine", 0.04, 0, 400);
+  }
+}
+let particles = [],
+  popups = [],
+  shake = 0,
+  flash = 0,
+  toastTime = 0,
+  t = 0,
+  ended = false;
+const stars = Array.from({ length: 75 }, (_, i) => ({
+  x: (i * 137.3) % W,
+  y: (i * 73.7) % H,
+  size: i % 7 === 0 ? 2 : 1,
+  speed: 3 + (i % 9),
+}));
+const dropNames = {
+  gem: "+500 GEM",
+  wide: "WIDE PADDLE · 12s",
+  slow: "SLOW BALL · 10s",
+  shield: "SHIELD · 15s",
+  multi: "MULTIBALL!",
+  life: "EXTRA LIFE",
+};
+function burst(x, y, color, count = 14) {
+  if (!save.motion) return;
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2,
+      s = 40 + Math.random() * 220;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s,
+      life: 0.35 + Math.random() * 0.5,
+      max: 0.85,
+      size: 2 + Math.random() * 4,
+      color,
+    });
+  }
+  if (particles.length > 450) particles.splice(0, particles.length - 450);
+}
+function toast(text) {
+  $("toast").textContent = text;
+  toastTime = 1.6;
+  $("toast").classList.add("visible");
+}
+const game = new Game({
+  event(name, data) {
+    sound(name);
+    switch (name) {
+      case "brick":
+        burst(data.x + 30, data.y + 10, data.color, 18);
+        popups.push({
+          x: data.x + 30,
+          y: data.y,
+          text: "+" + data.points,
+          life: 0.7,
+          color: data.color,
+        });
+        break;
+      case "explosion":
+        burst(data.x + 30, data.y + 10, "#ffb570", 40);
+        shake = save.motion ? 7 : 0;
+        break;
+      case "paddle":
+        burst(data.x, data.y, "#d3fa65", 5);
+        break;
+      case "pickup":
+        toast(dropNames[data.type]);
+        burst(data.x, PADDLE_Y, "#c49aff", 20);
+        break;
+      case "shield":
+        toast("SHIELD ABSORBED THE BOMB");
+        burst(game.paddle.x, PADDLE_Y, "#66dfd1", 35);
+        break;
+      case "damage":
+        shake = save.motion ? 13 : 0;
+        flash = 0.3;
+        toast(
+          data.reason === "bomb"
+            ? "BOMB HIT · PADDLE DAMAGED"
+            : "BALL LOST · PADDLE DAMAGED",
+        );
+        break;
+      case "clear":
+        showOverlay(
+          "WALL DEMOLISHED",
+          `LEVEL ${String(game.level).padStart(2, "0")} CLEAR`,
+          `${THEMES[game.level - 1]} complete.\n+${data.bonus.toLocaleString()} bonus points\nYour paddle is repaired on the next level.`,
+          "NEXT LEVEL ↗",
+          "Score saved. Keep the streak alive.",
+        );
+        break;
+      case "end":
+        finish(data.win);
+        break;
+      case "level":
+        $("status").textContent = THEMES[game.level - 1];
+        break;
+    }
+  },
+});
+function showOverlay(kicker, title, copy, button, foot = "") {
+  $("overlay").hidden = false;
+  $("overlay-kicker").textContent = kicker;
+  $("overlay-title").textContent = title;
+  $("overlay-copy").textContent = copy;
+  $("primary").textContent = button;
+  $("overlay-foot").textContent = foot;
+  $("secondary").hidden = !["paused", "over", "victory"].includes(game.state);
+  $("primary").focus({ preventScroll: true });
+}
+function hideOverlay() {
+  $("overlay").hidden = true;
+  canvas.focus({ preventScroll: true });
+}
+function renderRecords() {
+  const list = $("records");
+  list.replaceChildren();
+  if (!save.runs.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "Your next run starts the story.";
+    list.append(li);
+  }
+  save.runs.forEach((r, i) => {
+    const li = document.createElement("li"),
+      label = document.createElement("span"),
+      score = document.createElement("b");
+    label.textContent = `${String(i + 1).padStart(2, "0")} ${r.win ? "WIN" : "LV " + String(r.level).padStart(2, "0")}`;
+    score.textContent = String(r.score).padStart(6, "0");
+    li.append(label, score);
+    list.append(li);
+  });
+}
+function finish(win) {
+  if (ended) return;
+  ended = true;
+  save.best = Math.max(save.best, game.score);
+  save.runs.unshift({
+    score: game.score,
+    level: game.level,
+    win,
+    date: new Date().toISOString(),
+    seconds: Math.round(game.elapsed),
+    ...game.stats,
+  });
+  save.runs = save.runs.slice(0, 5);
+  persist();
+  renderRecords();
+  showOverlay(
+    win ? "YOU BROKE THROUGH" : "EVERY LEGEND MISSES SOMETIMES",
+    win ? "WALLS: ZERO. YOU: HERO." : "ONE MORE TRY?",
+    `${game.score.toLocaleString()} POINTS · LEVEL ${game.level}/10\n${game.stats.bricks} bricks · ${game.stats.gems} gems · ${Math.floor(game.elapsed / 60)}m ${Math.floor(game.elapsed % 60)}s\n${storageOK ? "Result saved on this device." : "Storage unavailable; result kept for this session."}`,
+    "PLAY AGAIN ↗",
+    "A fresh paddle. A fresh start.",
+  );
+}
+function start() {
+  audio();
+  ended = false;
+  particles = [];
+  popups = [];
+  game.start();
+  hideOverlay();
+  toast("MOVE THE PADDLE · SPACE OR TAP LAUNCH");
+}
+function pause() {
+  if (["playing", "ready"].includes(game.state)) {
+    game.beforePause = game.state;
+    game.state = "paused";
+    showOverlay(
+      "TAKE A BREATHER",
+      "ON A BREAK.",
+      `Score: ${game.score.toLocaleString()}\nYour ball, timers, and powers are frozen.`,
+      "BACK TO THE BLITZ ↗",
+      "P / ESC TO RESUME",
+    );
+  } else if (game.state === "paused") {
+    game.state = game.beforePause;
+    hideOverlay();
+  }
+}
+$("primary").onclick = () => {
+  audio();
+  if (
+    game.state === "title" ||
+    game.state === "over" ||
+    game.state === "victory"
+  )
+    start();
+  else if (game.state === "paused") pause();
+  else if (game.state === "clear") {
+    game.level++;
+    game.nextLevel();
+    hideOverlay();
+  }
+};
+$("secondary").onclick = () => {
+  if (
+    game.state === "paused" &&
+    !window.confirm("End this run and return to the menu?")
+  )
+    return;
+  if (game.state === "paused") finish(false);
+  game.state = "title";
+  showOverlay(
+    "INSERT A LITTLE COURAGE",
+    "READY TO BREAK IT?",
+    "Ten walls stand between you and glory.\nOne ball is all it takes.",
+    "LET’S PLAY ↗",
+    "← → MOVE / SPACE TO LAUNCH",
+  );
+};
+$("pause").onclick = pause;
+$("mobile-pause").onclick = pause;
+$("launch").onclick = () => {
+  audio();
+  if (game.state === "title") start();
+  else game.launch();
+};
+function settings() {
+  $("sound").textContent = save.sound ? "♪ SOUND ON" : "♪ SOUND OFF";
+  $("sound").setAttribute("aria-pressed", String(save.sound));
+  $("motion").textContent = save.motion ? "✦ FX ON" : "✦ FX OFF";
+  $("motion").setAttribute("aria-pressed", String(!save.motion));
+}
+$("sound").onclick = () => {
+  audio();
+  save.sound = !save.sound;
+  persist();
+  settings();
+  if (save.sound) sound("pickup");
+};
+$("motion").onclick = () => {
+  save.motion = !save.motion;
+  particles = [];
+  shake = 0;
+  persist();
+  settings();
+};
+const keys = new Set();
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLButtonElement && [" ", "Enter"].includes(e.key))
+    return;
+  const key = e.key.toLowerCase();
+  if (["arrowleft", "arrowright", " ", "a", "d", "p", "escape"].includes(key))
+    e.preventDefault();
+  if (e.repeat && [" ", "p", "escape"].includes(key)) return;
+  keys.add(key);
+  if (key === " ") {
+    audio();
+    if (
+      game.state === "title" ||
+      game.state === "over" ||
+      game.state === "victory"
+    )
+      start();
+    else if (game.state === "clear") $("primary").click();
+    else game.launch();
+  }
+  if (key === "p" || key === "escape") pause();
+});
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+function backgroundPause() {
+  keys.clear();
+  if (["playing", "ready"].includes(game.state)) pause();
+}
+window.addEventListener("blur", backgroundPause);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) backgroundPause();
+});
+function pointer(e) {
+  const r = canvas.getBoundingClientRect();
+  game.move(((e.clientX - r.left) / r.width) * W);
+}
+canvas.addEventListener("pointermove", (e) => {
+  if (e.pointerType === "mouse" || canvas.hasPointerCapture(e.pointerId))
+    pointer(e);
+});
+canvas.addEventListener("pointerdown", (e) => {
+  audio();
+  pointer(e);
+  canvas.setPointerCapture(e.pointerId);
+  if (e.pointerType === "mouse") game.launch();
+});
+function rect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+function label(text, x, y, color, size = 12, align = "center") {
+  ctx.font = `bold ${size}px monospace`;
+  ctx.textAlign = align;
+  ctx.fillStyle = color;
+  ctx.fillText(text, Math.round(x), Math.round(y));
+}
+function drawBrick(b) {
+  if (b.hp <= 0) return;
+  const { x, y, w, h } = b;
+  const color =
+    b.type === "steel"
+      ? "#5d627f"
+      : b.type === "explosive"
+        ? "#ffb570"
+        : b.color;
+  rect(x + 3, y + 3, w, h, "#0008");
+  rect(x, y, w, h, color);
+  rect(x + 3, y + 3, w - 6, 3, "#ffffff44");
+  rect(x + 3, y + h - 4, w - 6, 3, "#0003");
+  rect(x, y, 3, h, "#ffffff20");
+  if (b.type === "steel") {
+    rect(x + 8, y + 8, 4, 4, "#b4b7cd");
+    rect(x + w - 12, y + 8, 4, 4, "#b4b7cd");
+    rect(x + 18, y + 8, w - 36, 5, "#33384e");
+  } else if (b.type === "explosive") {
+    label("×", x + w / 2, y + 17, "#40263b", 19);
+  } else if (b.maxHp > 1) {
+    for (let i = 0; i < b.hp; i++)
+      rect(x + w / 2 - (b.hp * 7) / 2 + i * 7, y + 10, 4, 4, "#221b3c99");
+    if (b.hp < b.maxHp) {
+      ctx.strokeStyle = "#171124";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 18, y);
+      ctx.lineTo(x + 25, y + 9);
+      ctx.lineTo(x + 20, y + 14);
+      ctx.lineTo(x + 30, y + h);
+      ctx.stroke();
+    }
+  }
+}
+const icons = {
+  gem: "◆",
+  wide: "↔",
+  slow: "S",
+  shield: "◇",
+  multi: "···",
+  life: "♥",
+  bomb: "✹",
+};
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  rect(0, 0, W, H, "#0b0b1b");
+  for (const star of stars) {
+    const y = (star.y + t * star.speed) % H;
+    rect(
+      star.x,
+      y,
+      star.size,
+      star.size,
+      star.size === 2 ? "#79748a88" : "#514c6a66",
+    );
+  }
+  ctx.strokeStyle = "#24213e55";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  ctx.save();
+  if (shake > 0 && save.motion)
+    ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  label(
+    `SECTOR ${String(game.level).padStart(2, "0")} / ${THEMES[game.level - 1]}`,
+    32,
+    36,
+    "#77718c",
+    10,
+    "left",
+  );
+  label("BREAK ALL TARGETS", W - 32, 36, "#77718c", 10, "right");
+  for (const b of game.bricks) drawBrick(b);
+  if (game.combo >= 5) {
+    label(
+      `${Math.min(4, 1 + Math.floor(game.combo / 5))}× COMBO`,
+      W / 2,
+      380,
+      "#d3fa65",
+      22,
+    );
+    label(`${game.combo} BRICKS IN A ROW`, W / 2, 401, "#9891aa", 10);
+  }
+  for (const d of game.drops) {
+    const color =
+      d.type === "bomb"
+        ? "#ff7695"
+        : d.type === "life"
+          ? "#d3fa65"
+          : d.type === "gem"
+            ? "#c49aff"
+            : "#66dfd1";
+    if (d.type === "bomb") {
+      rect(d.x - 9, d.y - 9, 18, 18, "#ff7695");
+      rect(d.x - 5, d.y - 13, 10, 4, "#ffb570");
+      rect(
+        d.x + 3,
+        d.y - 18,
+        3,
+        5,
+        Math.sin(t * 20) > 0 ? "#fff0ae" : "#ff7695",
+      );
+      label("×", d.x, d.y + 6, "#391b32", 20);
+    } else {
+      rect(d.x - 12, d.y - 12, 24, 24, color);
+      rect(d.x - 10, d.y - 10, 20, 20, "#17162b");
+      label(icons[d.type], d.x, d.y + 6, color, 19);
+    }
+  }
+  const p = game.paddle;
+  ctx.shadowColor = "#d3fa65";
+  ctx.shadowBlur = save.motion ? 16 : 0;
+  rect(p.x - p.w / 2, PADDLE_Y, p.w, 12, "#d3fa65");
+  ctx.shadowBlur = 0;
+  rect(p.x - p.w / 2 + 4, PADDLE_Y + 3, p.w - 8, 3, "#f3ffc4");
+  rect(p.x - p.w / 2, PADDLE_Y, 7, 12, "#88b73f");
+  rect(p.x + p.w / 2 - 7, PADDLE_Y, 7, 12, "#88b73f");
+  if (game.powers.shield > 0) {
+    ctx.strokeStyle = "#66dfd1";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(p.x - p.w / 2 - 7, PADDLE_Y - 7, p.w + 14, 24);
+  }
+  for (const b of game.balls) {
+    if (save.motion)
+      b.trail.forEach((q, i) => {
+        ctx.globalAlpha = (1 - i / 9) * 0.3;
+        rect(q.x - 4, q.y - 4, 8, 8, "#d3fa65");
+      });
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = "#eaffb8";
+    ctx.shadowBlur = save.motion ? 15 : 0;
+    rect(b.x - 5, b.y - 7, 10, 14, "#f5ffe3");
+    rect(b.x - 7, b.y - 5, 14, 10, "#f5ffe3");
+    ctx.shadowBlur = 0;
+    rect(b.x - 3, b.y - 4, 4, 4, "#fff");
+  }
+  for (const p of particles) {
+    ctx.globalAlpha = Math.min(1, p.life / 0.3);
+    rect(p.x, p.y, p.size, p.size, p.color);
+  }
+  ctx.globalAlpha = 1;
+  for (const p of popups) {
+    ctx.globalAlpha = Math.min(1, p.life * 2);
+    label(p.text, p.x, p.y, p.color, 13);
+  }
+  ctx.globalAlpha = 1;
+  if (game.state === "ready") {
+    label("↑", game.paddle.x, PADDLE_Y - 64, "#d3fa65", 25);
+    label("CLICK / SPACE / TAP LAUNCH", W / 2, 500, "#d3fa65", 12);
+  }
+  let x = 32;
+  for (const [key, value] of Object.entries(game.powers)) {
+    if (value > 0) {
+      const text = `${key.toUpperCase()} ${Math.ceil(value)}s`;
+      rect(x, H - 26, text.length * 7 + 14, 18, "#25233f");
+      label(text, x + 7, H - 13, "#a8ead5", 10, "left");
+      x += text.length * 7 + 24;
+    }
+  }
+  ctx.strokeStyle = "#ff76954d";
+  ctx.setLineDash([4, 7]);
+  ctx.beginPath();
+  ctx.moveTo(20, H - 40);
+  ctx.lineTo(W - 20, H - 40);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  if (flash > 0) {
+    ctx.globalAlpha = flash;
+    rect(0, 0, W, H, "#ff335f");
+    ctx.globalAlpha = 1;
+  }
+}
+let last = performance.now(),
+  acc = 0,
+  previousScore = -1;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  t += dt;
+  const active = ["playing", "ready"].includes(game.state);
+  if (active) {
+    acc += dt;
+    while (acc >= 1 / 120) {
+      game.update(
+        1 / 120,
+        (keys.has("arrowright") || keys.has("d") ? 1 : 0) -
+          (keys.has("arrowleft") || keys.has("a") ? 1 : 0),
+      );
+      acc -= 1 / 120;
+    }
+  } else acc = 0;
+  if (game.state !== "paused") {
+    for (const p of particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 260 * dt;
+      p.life -= dt;
+    }
+    particles = particles.filter((p) => p.life > 0);
+    for (const p of popups) {
+      p.y -= 35 * dt;
+      p.life -= dt;
+    }
+    popups = popups.filter((p) => p.life > 0);
+    shake = Math.max(0, shake - dt * 32);
+    flash = Math.max(0, flash - dt);
+    toastTime -= dt;
+    if (toastTime <= 0) $("toast").classList.remove("visible");
+  }
+  if (previousScore !== game.score) {
+    previousScore = game.score;
+    $("score").textContent = String(game.score).padStart(6, "0");
+    if (game.score > save.best) {
+      save.best = game.score;
+      persist();
+    }
+  }
+  $("best").textContent = String(save.best).padStart(6, "0");
+  $("level").textContent = `${String(game.level).padStart(2, "0")} / 10`;
+  $("lives").textContent =
+    game.lives > 0 ? "♥ ".repeat(game.lives).trim() : "—";
+  $("lives").setAttribute("aria-label", `${game.lives} lives remaining`);
+  const integrity = Math.round((game.baseWidth() / 120) * 100);
+  $("integrity").textContent = integrity + "%";
+  $("integrity-bar").style.width = integrity + "%";
+  $("pause").disabled = !["playing", "ready", "paused"].includes(game.state);
+  $("mobile-pause").disabled = $("pause").disabled;
+  draw();
+  requestAnimationFrame(frame);
+}
+settings();
+renderRecords();
+requestAnimationFrame(frame);
