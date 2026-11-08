@@ -4,7 +4,7 @@ Tagline: **Break the wall. Catch the rewards. Dodge the fallout.**
 
 Status: design reference for the first playable release. See README.md for implemented behavior. Balance values remain subject to playtesting.
 
-Implementation update: the game uses JavaScript ES modules with Vite. Losing a life shortens the base paddle by 16 pixels, down to 72 pixels. Damage persists within a level; advancing to the next level repairs the paddle. Wide paddle multiplies the current base width by 1.5. Results and settings are saved locally.
+Implementation update: JavaScript ES modules with Vite; pixel fonts Press Start 2P and VT323. The paddle starts at 160 pixels and loses 20 pixels per failure down to 100. Failures add 12% speed each (maximum 36%); new levels reset damage and speed penalty. Slow pickups apply a 35% reduction for 10 seconds. Bricks are 86 × 32 pixels; ball radius is 10 pixels. Six procedural wall silhouettes replace the original fixed layouts. Drop odds: nothing 68%, gem 10%, wide 5%, slow 6%, shield 3%, multiball 4%, life 1%, bomb 3%. These implemented values supersede the original proposal below. Results and settings are saved locally.
 
 ## 1. Concept and goal
 

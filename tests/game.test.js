@@ -24,7 +24,7 @@ test("seeded generator is repeatable; item probabilities and bomb cap have corre
     b = seeded(3);
   for (let i = 0; i < 100; i++) assert.equal(a(), b());
   assert.deepEqual(
-    [0.1, 0.72, 0.82, 0.87, 0.91, 0.94, 0.96, 0.97].map((n) =>
+    [0.1, 0.68, 0.78, 0.83, 0.89, 0.92, 0.96, 0.97].map((n) =>
       dropType(n, false),
     ),
     [null, "gem", "wide", "slow", "shield", "multi", "life", "bomb"],
@@ -69,21 +69,21 @@ test("miss shrinks paddle, resets powers, preserves brick damage; next level rep
   g.update(1 / 120);
   assert.equal(g.lives, 2);
   assert.equal(g.state, "ready");
-  assert.equal(g.paddle.w, 104);
+  assert.equal(g.paddle.w, 140);
   assert.deepEqual(g.powers, {});
   assert.equal(g.bricks[0].hp, 0);
   g.level++;
   g.nextLevel();
-  assert.equal(g.paddle.w, 120);
+  assert.equal(g.paddle.w, 160);
 });
-test("paddle never shrinks below 72 pixels", () => {
+test("paddle never shrinks below 100 pixels", () => {
   const g = playing();
   g.lives = 20;
   for (let i = 0; i < 10; i++) {
     g.launch();
     g.lose("bomb");
   }
-  assert.equal(g.baseWidth(), 72);
+  assert.equal(g.baseWidth(), 100);
 });
 test("shield pickup protects against simultaneous bomb; unshielded bomb and miss cost one life", () => {
   const g = playing();
@@ -117,13 +117,13 @@ test("powers refresh, expire, and extra life at cap converts to score", () => {
   const g = playing();
   g.catchDrop({ type: "wide" });
   g.update(0.5);
-  assert.equal(g.paddle.w, 180);
+  assert.equal(g.paddle.w, 240);
   g.catchDrop({ type: "wide" });
   assert.equal(g.powers.wide, 12);
   g.powers.wide = 0.001;
   g.update(0.01);
   g.update(0.01);
-  assert.equal(g.paddle.w, 120);
+  assert.equal(g.paddle.w, 160);
   g.lives = 5;
   g.catchDrop({ type: "life" });
   assert.equal(g.lives, 5);
@@ -200,4 +200,53 @@ test("long seeded auto-paddle run remains finite and bounded", () => {
     assert(g.balls.length <= 3);
   }
   assert(g.score > 0);
+});
+
+test("seeded random walls vary, repeat reliably, and keep safe geometry across 1,000 layouts", () => {
+  const layouts = new Set();
+  const shapes = new Set();
+  for (let seed = 1; seed <= 1000; seed++) {
+    const n = 1 + (seed % 10),
+      bricks = makeLevel(n, seeded(seed));
+    assert.deepEqual(bricks, makeLevel(n, seeded(seed)));
+    shapes.add(bricks.shape);
+    layouts.add(JSON.stringify(bricks));
+    assert(bricks.filter((b) => b.type !== "steel").length >= 16);
+    assert(
+      bricks.every(
+        (b) =>
+          b.w === 86 &&
+          b.h === 32 &&
+          b.x >= 0 &&
+          b.x + b.w <= 800 &&
+          b.y + b.h <= PADDLE_Y - 260,
+      ),
+    );
+    // Steel barriers are isolated: no unbreakable rectangle can trap a target.
+    const steel = bricks.filter((b) => b.type === "steel");
+    assert(steel.length <= 2);
+    assert(steel.every((b) => b.r === 1));
+  }
+  assert.equal(shapes.size, 6);
+  assert(layouts.size > 100);
+});
+
+test("failures accelerate balls, slow pickups reduce speed without stacking, and next level repairs speed", () => {
+  const g = playing(),
+    baseline = g.speed();
+  g.lose("miss");
+  assert.equal(g.speed(), baseline * 1.12);
+  g.launch();
+  g.lose("bomb");
+  assert.equal(g.speed(), baseline * 1.24);
+  g.launch();
+  g.catchDrop({ type: "slow" });
+  assert.equal(g.speed(), baseline * 1.24 * 0.65);
+  g.catchDrop({ type: "slow" });
+  assert.equal(g.speed(), baseline * 1.24 * 0.65);
+  g.powers.slow = 0.001;
+  g.update(0.01);
+  assert.equal(g.speed(), baseline * 1.24);
+  g.nextLevel();
+  assert.equal(g.speed(), baseline);
 });

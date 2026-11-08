@@ -23,22 +23,48 @@ export function seeded(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-export function makeLevel(n) {
+export const WALL_SHAPES = [
+  "DIAMOND",
+  "SPACE INVADER",
+  "CHEVRON",
+  "TWIN TOWERS",
+  "WAVE",
+  "PORTAL",
+];
+export function makeLevel(n, random = Math.random) {
   const bricks = [],
-    rows = Math.min(4 + Math.floor(n / 2), 7);
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < 11; c++) {
-      if (n > 1 && (c + r * 2 + n) % 9 === 0) continue;
+    rows = Math.min(4 + Math.floor(n / 3), 6);
+  const shape = Math.floor(random() * WALL_SHAPES.length);
+  const phase = Math.floor(random() * 3);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < 8; c++) {
+      const d = Math.abs(c - 3.5),
+        mid = (rows - 1) / 2;
+      const masks = [
+        d <= 3.8 - Math.abs(r - mid),
+        r === 0
+          ? d > 0.5 && d < 3.5
+          : r === rows - 1
+            ? c % 3 !== 1
+            : r === 1
+              ? d < 2.6
+              : true,
+        Math.abs(r - d * 0.65) < 1.7,
+        d >= 1 || r === 0 || r === rows - 1,
+        r >= Math.floor((Math.sin((c + phase) * 0.9) + 1) * 0.9),
+        r === 0 || r === rows - 1 || d > 1.5,
+      ];
+      if (!masks[shape]) continue;
       let type =
-        n >= 3 && (c + r * 3) % 13 === 5
+        n >= 3 && random() < 0.16
           ? "explosive"
-          : n >= 5 && (r + c) % 5 === 0
+          : n >= 5 && (r + c + phase) % 5 === 0
             ? "reinforced"
-            : n >= 2 && (r + c) % 3 === 0
+            : n >= 2 && (r + c + phase) % 3 === 0
               ? "armored"
               : "standard";
-      // Sparse single steel barriers leave every brick exposed from below or a side.
-      if (n >= 4 && r === 2 && (c === 3 || c === 7)) type = "steel";
+      // Isolated steel cells cannot enclose targets or seal a passage.
+      if (n >= 4 && r === 1 && (c === 2 || c === 5)) type = "steel";
       const hp =
         type === "steel"
           ? Infinity
@@ -48,19 +74,21 @@ export function makeLevel(n) {
               ? 2
               : 1;
       bricks.push({
-        id: r * 11 + c,
+        id: r * 8 + c,
         r,
         c,
-        x: 32 + c * 67,
-        y: 76 + r * 31,
-        w: 61,
-        h: 23,
+        x: 28 + c * 94,
+        y: 66 + r * 40,
+        w: 86,
+        h: 32,
         type,
         hp,
         maxHp: hp,
-        color: COLORS[r % COLORS.length],
+        color: COLORS[(r + phase) % COLORS.length],
       });
     }
+  }
+  bricks.shape = WALL_SHAPES[shape];
   return bricks;
 }
 export function circleRect(ball, rect) {
@@ -69,11 +97,11 @@ export function circleRect(ball, rect) {
   return (ball.x - x) ** 2 + (ball.y - y) ** 2 <= ball.r ** 2;
 }
 export function dropType(roll, bombExists) {
-  if (roll < 0.72) return null;
-  if (roll < 0.82) return "gem";
-  if (roll < 0.87) return "wide";
-  if (roll < 0.91) return "slow";
-  if (roll < 0.94) return "shield";
+  if (roll < 0.68) return null;
+  if (roll < 0.78) return "gem";
+  if (roll < 0.83) return "wide";
+  if (roll < 0.89) return "slow";
+  if (roll < 0.92) return "shield";
   if (roll < 0.96) return "multi";
   if (roll < 0.97) return "life";
   return bombExists ? null : "bomb";
@@ -85,11 +113,11 @@ export class Game {
     this.state = "title";
     this.balls = [];
     this.drops = [];
-    this.bricks = makeLevel(1);
+    this.bricks = makeLevel(1, this.random);
     this.level = 1;
     this.score = 0;
     this.lives = 3;
-    this.paddle = { x: W / 2, w: 120 };
+    this.paddle = { x: W / 2, w: 160 };
     this.powers = {};
     this.damage = 0;
     this.combo = 0;
@@ -105,7 +133,7 @@ export class Game {
     this.nextLevel();
   }
   nextLevel() {
-    this.bricks = makeLevel(this.level);
+    this.bricks = makeLevel(this.level, this.random);
     this.damage = 0;
     this.levelLosses = 0;
     this.returns = 0;
@@ -121,17 +149,20 @@ export class Game {
     this.returns = 0;
     this.paddle.w = this.baseWidth();
     this.paddle.x = W / 2;
-    this.balls = [{ x: W / 2, y: PADDLE_Y - 9, r: 7, vx: 0, vy: 0, trail: [] }];
+    this.balls = [
+      { x: W / 2, y: PADDLE_Y - 12, r: 10, vx: 0, vy: 0, trail: [] },
+    ];
     this.state = "ready";
   }
   baseWidth() {
-    return Math.max(72, 120 - this.damage * 16);
+    return Math.max(100, 160 - this.damage * 20);
   }
   speed() {
     return (
       (360 + 25 * (this.level - 1)) *
       (1 + Math.min((this.returns / 10) | 0, 6) * 0.03) *
-      (this.powers.slow > 0 ? 0.75 : 1)
+      (1 + this.damage * 0.12) *
+      (this.powers.slow > 0 ? 0.65 : 1)
     );
   }
   move(x) {
@@ -222,7 +253,7 @@ export class Game {
           this.balls.push({
             x: ball.x,
             y: ball.y,
-            r: 7,
+            r: 10,
             vx: Math.sin(a) * s,
             vy: -Math.cos(a) * s,
             trail: [],
@@ -260,7 +291,7 @@ export class Game {
     this.move(this.paddle.x);
     if (this.state === "ready") {
       this.balls[0].x = this.paddle.x;
-      this.balls[0].y = PADDLE_Y - 9;
+      this.balls[0].y = PADDLE_Y - 12;
       return;
     }
     this.elapsed += dt;
@@ -301,7 +332,7 @@ export class Game {
           x: this.paddle.x - this.paddle.w / 2,
           y: PADDLE_Y,
           w: this.paddle.w,
-          h: 12,
+          h: 18,
         };
         if (b.vy > 0 && py <= PADDLE_Y && circleRect(b, p)) {
           let a = ((b.x - this.paddle.x) / (this.paddle.w / 2)) * 1.13;
@@ -352,7 +383,7 @@ export class Game {
       d.y += 150 * dt;
       if (
         d.y + 11 >= PADDLE_Y &&
-        d.y - 11 <= PADDLE_Y + 12 &&
+        d.y - 11 <= PADDLE_Y + 18 &&
         Math.abs(d.x - this.paddle.x) < this.paddle.w / 2 + 11
       )
         caught.push(d);

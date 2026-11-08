@@ -2,7 +2,7 @@
 
 **Break the wall. Catch the rewards. Dodge the fallout.**
 
-A browser arcade game with original pixel graphics, synthesized chiptune sounds, ten levels, explosive bricks, power-ups, and local high scores. Built with JavaScript, Canvas 2D, and Vite; no game engine or server required.
+A browser arcade game with original pixel graphics, synthesized chiptune sounds, ten levels with randomly generated diamond, invader, chevron, twin-tower, wave, and portal walls, explosive bricks, power-ups, and local high scores. Built with JavaScript, Canvas 2D, and Vite; no game engine or server required.
 
 ## Play
 
@@ -19,13 +19,13 @@ https://pavelsokolovan.github.io/break-the-wall-game/
 
 Hit near the paddle edges to aim diagonally. Clear every breakable brick to advance. Steel bricks are indestructible. Armored bricks need two hits; reinforced bricks need three. Orange explosive bricks damage adjacent bricks and trigger chains.
 
-Start with three lives. Missing the last ball or catching an unshielded bomb costs one life and shortens the paddle by 16 pixels, down to a 72-pixel minimum. Each new level repairs it. Power-ups disappear on life loss or level completion.
+Start with three lives. Missing the last ball or catching an unshielded bomb costs one life and shortens the 160-pixel paddle by 20 pixels, down to a 100-pixel minimum, and adds 12% ball speed (up to 36%). Each new level repairs the paddle and clears the speed penalty. Power-ups disappear on life loss or level completion.
 
 | Drop | Effect |
 | --- | --- |
 | Gem | +500 points |
 | Wide | 50% wider paddle for 12 seconds |
-| Slow | 25% slower balls for 10 seconds |
+| Slow | 35% slower balls for 10 seconds |
 | Shield | Absorb one bomb within 15 seconds |
 | Multiball | Up to three balls |
 | Heart | Extra life, maximum five; +1,000 points at the cap |
@@ -62,6 +62,8 @@ Tests exercise scoring, durability, explosive chains, paddle damage, drops, shie
 
 The workflow tests the game, builds with the repository base path, and deploys `dist/` using GitHub's short-lived token. No extra secret is required. A local commit alone does not deploy; the commit must reach GitHub.
 
-Space Grotesk and Space Mono fonts are bundled locally under the SIL Open Font License; their notices are included in `public/licenses/` and in the built site. Game visuals and audio are created in code.
+Press Start 2P and VT323 pixel fonts are bundled locally under the SIL Open Font License; their notices are included in `public/licenses/` and in the built site. Game visuals and audio are created in code.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) and [GAME_DESIGN.md](GAME_DESIGN.md) for more detail. No license has been selected yet.
+
+Brick visuals distinguish masonry, bolted armor, reinforced plates, dynamite, and riveted steel. Bricks measure 86 × 32 pixels and balls have a 10-pixel radius in the 800 × 640 playfield. Multiball drops have a 4% chance per destroyed brick, and slow-ball drops have a 6% chance.

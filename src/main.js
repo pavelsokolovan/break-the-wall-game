@@ -131,9 +131,9 @@ const stars = Array.from({ length: 75 }, (_, i) => ({
 const dropNames = {
   gem: "+500 GEM",
   wide: "WIDE PADDLE · 12s",
-  slow: "SLOW BALL · 10s",
+  slow: "SLOW BALL -35% · 10s",
   shield: "SHIELD · 15s",
-  multi: "MULTIBALL!",
+  multi: "TRIPLE BALL!",
   life: "EXTRA LIFE",
 };
 function burst(x, y, color, count = 14) {
@@ -164,9 +164,9 @@ const game = new Game({
     sound(name);
     switch (name) {
       case "brick":
-        burst(data.x + 30, data.y + 10, data.color, 18);
+        burst(data.x + data.w / 2, data.y + data.h / 2, data.color, 18);
         popups.push({
-          x: data.x + 30,
+          x: data.x + data.w / 2,
           y: data.y,
           text: "+" + data.points,
           life: 0.7,
@@ -174,7 +174,7 @@ const game = new Game({
         });
         break;
       case "explosion":
-        burst(data.x + 30, data.y + 10, "#ffb570", 40);
+        burst(data.x + data.w / 2, data.y + data.h / 2, "#ffb570", 40);
         shake = save.motion ? 7 : 0;
         break;
       case "paddle":
@@ -193,15 +193,15 @@ const game = new Game({
         flash = 0.3;
         toast(
           data.reason === "bomb"
-            ? "BOMB HIT · PADDLE DAMAGED"
-            : "BALL LOST · PADDLE DAMAGED",
+            ? "BOMB HIT · SPEED +12%"
+            : "BALL LOST · SPEED +12%",
         );
         break;
       case "clear":
         showOverlay(
           "WALL DEMOLISHED",
           `LEVEL ${String(game.level).padStart(2, "0")} CLEAR`,
-          `${THEMES[game.level - 1]} complete.\n+${data.bonus.toLocaleString()} bonus points\nYour paddle is repaired on the next level.`,
+          `${game.bricks.shape || THEMES[game.level - 1]} complete.\n+${data.bonus.toLocaleString()} bonus points\nPaddle repaired and speed reset on the next level.`,
           "NEXT LEVEL ↗",
           "Score saved. Keep the streak alive.",
         );
@@ -404,44 +404,63 @@ function rect(x, y, w, h, color) {
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 function label(text, x, y, color, size = 12, align = "center") {
-  ctx.font = `bold ${size}px monospace`;
+  ctx.font = `${size * 1.35}px "VT323", monospace`;
   ctx.textAlign = align;
   ctx.fillStyle = color;
   ctx.fillText(text, Math.round(x), Math.round(y));
 }
 function drawBrick(b) {
   if (b.hp <= 0) return;
-  const { x, y, w, h } = b;
+  const { x, y, w, h, type } = b;
   const color =
-    b.type === "steel"
-      ? "#5d627f"
-      : b.type === "explosive"
-        ? "#ffb570"
-        : b.color;
-  rect(x + 3, y + 3, w, h, "#0008");
-  rect(x, y, w, h, color);
-  rect(x + 3, y + 3, w - 6, 3, "#ffffff44");
-  rect(x + 3, y + h - 4, w - 6, 3, "#0003");
-  rect(x, y, 3, h, "#ffffff20");
-  if (b.type === "steel") {
-    rect(x + 8, y + 8, 4, 4, "#b4b7cd");
-    rect(x + w - 12, y + 8, 4, 4, "#b4b7cd");
-    rect(x + 18, y + 8, w - 36, 5, "#33384e");
-  } else if (b.type === "explosive") {
-    label("×", x + w / 2, y + 17, "#40263b", 19);
-  } else if (b.maxHp > 1) {
-    for (let i = 0; i < b.hp; i++)
-      rect(x + w / 2 - (b.hp * 7) / 2 + i * 7, y + 10, 4, 4, "#221b3c99");
-    if (b.hp < b.maxHp) {
-      ctx.strokeStyle = "#171124";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x + 18, y);
-      ctx.lineTo(x + 25, y + 9);
-      ctx.lineTo(x + 20, y + 14);
-      ctx.lineTo(x + 30, y + h);
-      ctx.stroke();
+    type === "steel"
+      ? "#8798b5"
+      : type === "explosive"
+        ? "#ff9c42"
+        : type === "reinforced"
+          ? "#b38aff"
+          : b.color;
+  rect(x + 4, y + 4, w, h, "#0009");
+  rect(x, y, w, h, "#171827");
+  rect(x + 3, y + 3, w - 6, h - 6, color);
+  rect(x + 6, y + 3, w - 12, 4, "#ffffff66");
+  rect(x + 3, y + h - 7, w - 6, 4, "#0005");
+  if (type === "steel") {
+    // Riveted steel with diagonal hazard slots.
+    for (let k = 14; k < w - 12; k += 12) {
+      rect(x + k, y + 11, 5, 12, "#3c4b63");
+      rect(x + k + 4, y + 7, 5, 8, "#3c4b63");
     }
+    for (const dx of [6, w - 10])
+      for (const dy of [6, h - 10]) rect(x + dx, y + dy, 4, 4, "#e3edff");
+  } else if (type === "reinforced") {
+    // Three nested armor plates, removed as durability falls.
+    for (let k = 0; k < b.hp; k++) {
+      const dx = x + 13 + k * 20;
+      rect(dx, y + 9, 16, 15, "#533783");
+      rect(dx + 3, y + 12, 10, 8, "#d8b5ff");
+    }
+  } else if (type === "armored") {
+    // Bolted panel and horizontal plating seam.
+    rect(x + 9, y + 15, w - 18, 3, "#28213c88");
+    for (const dx of [8, w - 12]) rect(x + dx, y + 11, 4, 10, "#f4f0df");
+    rect(x + w / 2 - 7, y + 10, 14, 12, "#28213c");
+    rect(x + w / 2 - 3, y + 13, 6, 6, color);
+  } else if (type === "explosive") {
+    // Pixel dynamite bundle and a fuse, readable without color.
+    for (let k = 0; k < 3; k++)
+      rect(x + w / 2 - 13 + k * 9, y + 11, 7, 14, "#a22b3f");
+    rect(x + w / 2 - 15, y + 17, 32, 4, "#ffe9a1");
+    rect(x + w / 2 + 5, y + 7, 4, 5, "#fff6c7");
+  } else {
+    // Classic staggered masonry seam.
+    rect(x + 5, y + 16, w - 10, 2, "#0003");
+    rect(x + w / 2, y + 7, 2, 9, "#0003");
+  }
+  if (b.hp < b.maxHp) {
+    rect(x + w - 27, y + 3, 4, 10, "#191628");
+    rect(x + w - 31, y + 11, 8, 4, "#191628");
+    rect(x + w - 31, y + 14, 4, 12, "#191628");
   }
 }
 const icons = {
@@ -484,14 +503,21 @@ function draw() {
   if (shake > 0 && save.motion)
     ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   label(
-    `SECTOR ${String(game.level).padStart(2, "0")} / ${THEMES[game.level - 1]}`,
+    `SECTOR ${String(game.level).padStart(2, "0")} / ${game.bricks.shape || THEMES[game.level - 1]}`,
     32,
     36,
     "#77718c",
     10,
     "left",
   );
-  label("BREAK ALL TARGETS", W - 32, 36, "#77718c", 10, "right");
+  label(
+    `SPEED ${Math.round(game.speed())} / ${game.balls.length} BALLS`,
+    W - 32,
+    36,
+    "#77718c",
+    10,
+    "right",
+  );
   for (const b of game.bricks) drawBrick(b);
   if (game.combo >= 5) {
     label(
@@ -526,21 +552,28 @@ function draw() {
     } else {
       rect(d.x - 12, d.y - 12, 24, 24, color);
       rect(d.x - 10, d.y - 10, 20, 20, "#17162b");
-      label(icons[d.type], d.x, d.y + 6, color, 19);
+      if (d.type === "multi") {
+        for (const [dx, dy] of [
+          [-6, 4],
+          [6, 4],
+          [0, -5],
+        ])
+          rect(d.x + dx - 3, d.y + dy - 3, 6, 6, color);
+      } else label(icons[d.type], d.x, d.y + 6, color, 19);
     }
   }
   const p = game.paddle;
   ctx.shadowColor = "#d3fa65";
   ctx.shadowBlur = save.motion ? 16 : 0;
-  rect(p.x - p.w / 2, PADDLE_Y, p.w, 12, "#d3fa65");
+  rect(p.x - p.w / 2, PADDLE_Y, p.w, 18, "#d3fa65");
   ctx.shadowBlur = 0;
   rect(p.x - p.w / 2 + 4, PADDLE_Y + 3, p.w - 8, 3, "#f3ffc4");
-  rect(p.x - p.w / 2, PADDLE_Y, 7, 12, "#88b73f");
-  rect(p.x + p.w / 2 - 7, PADDLE_Y, 7, 12, "#88b73f");
+  rect(p.x - p.w / 2, PADDLE_Y, 10, 18, "#88b73f");
+  rect(p.x + p.w / 2 - 10, PADDLE_Y, 10, 18, "#88b73f");
   if (game.powers.shield > 0) {
     ctx.strokeStyle = "#66dfd1";
     ctx.lineWidth = 2;
-    ctx.strokeRect(p.x - p.w / 2 - 7, PADDLE_Y - 7, p.w + 14, 24);
+    ctx.strokeRect(p.x - p.w / 2 - 10, PADDLE_Y - 7, p.w + 14, 32);
   }
   for (const b of game.balls) {
     if (save.motion)
@@ -551,8 +584,8 @@ function draw() {
     ctx.globalAlpha = 1;
     ctx.shadowColor = "#eaffb8";
     ctx.shadowBlur = save.motion ? 15 : 0;
-    rect(b.x - 5, b.y - 7, 10, 14, "#f5ffe3");
-    rect(b.x - 7, b.y - 5, 14, 10, "#f5ffe3");
+    rect(b.x - 6, b.y - 10, 12, 20, "#f5ffe3");
+    rect(b.x - 10, b.y - 6, 20, 12, "#f5ffe3");
     ctx.shadowBlur = 0;
     rect(b.x - 3, b.y - 4, 4, 4, "#fff");
   }
@@ -643,7 +676,7 @@ function frame(now) {
   $("lives").textContent =
     game.lives > 0 ? "♥ ".repeat(game.lives).trim() : "—";
   $("lives").setAttribute("aria-label", `${game.lives} lives remaining`);
-  const integrity = Math.round((game.baseWidth() / 120) * 100);
+  const integrity = Math.round((game.baseWidth() / 160) * 100);
   $("integrity").textContent = integrity + "%";
   $("integrity-bar").style.width = integrity + "%";
   $("pause").disabled = !["playing", "ready", "paused"].includes(game.state);

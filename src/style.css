@@ -1,11 +1,7 @@
-@import "@fontsource/space-grotesk/latin-400.css";
-@import "@fontsource/space-grotesk/latin-500.css";
-@import "@fontsource/space-grotesk/latin-600.css";
-@import "@fontsource/space-grotesk/latin-700.css";
-@import "@fontsource/space-mono/latin-400.css";
-@import "@fontsource/space-mono/latin-700.css";
+@import "@fontsource/press-start-2p/latin-400.css";
+@import "@fontsource/vt323/latin-400.css";
 :root {
-  font-family: "Space Grotesk", Arial, sans-serif;
+  font-family: "VT323", monospace;
   color: #eeeefa;
   background: #0a0a16;
   font-synthesis: none;
@@ -74,7 +70,7 @@ header {
 }
 .wordmark-sub {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 2px;
   margin-left: 12px;
 }
@@ -84,7 +80,7 @@ header {
 }
 .header-actions button {
   background: transparent;
-  font-size: 10px;
+  font-size: 14px;
 }
 main {
   padding-top: 44px;
@@ -130,12 +126,12 @@ main {
   padding-right: 25px;
 }
 .intro-copy p:first-child {
-  font-size: 19px;
+  font-size: 26px;
   color: #e9e8f2;
   margin-bottom: 12px;
 }
 .intro-copy p {
-  font-size: 14px;
+  font-size: 19px;
   line-height: 1.7;
   color: var(--muted);
 }
@@ -187,12 +183,12 @@ main {
 }
 .hud .hearts {
   color: #ff7395;
-  font-size: 15px;
+  font-size: 20px;
   white-space: nowrap;
 }
 .hud button {
   padding: 8px 11px;
-  font-size: 17px;
+  font-size: 23px;
 }
 .screen {
   position: relative;
@@ -237,7 +233,7 @@ canvas {
 }
 .overlay .eyebrow {
   color: #b6a4dc;
-  font-size: 9px;
+  font-size: 12px;
 }
 .pixel-icon {
   font: bold 50px monospace;
@@ -257,7 +253,7 @@ canvas {
 }
 .overlay-copy,
 #overlay-copy {
-  font-size: 14px;
+  font-size: 19px;
   color: #b0afc3;
   line-height: 1.7;
   white-space: pre-line;
@@ -269,7 +265,7 @@ canvas {
   color: #171d0d;
   min-width: 235px;
   padding: 17px 22px;
-  font-size: 12px;
+  font-size: 16px;
   box-shadow: 4px 4px 0 #647b2c;
 }
 .primary:hover {
@@ -279,7 +275,7 @@ canvas {
 }
 .primary span {
   margin-left: 35px;
-  font-size: 18px;
+  font-size: 24px;
 }
 .secondary {
   display: block;
@@ -348,7 +344,7 @@ aside {
   background: #10101bc0;
 }
 .side-card .eyebrow {
-  font-size: 8px;
+  font-size: 11px;
   margin-bottom: 16px;
   letter-spacing: 1.3px;
 }
@@ -363,11 +359,11 @@ aside {
 }
 .side-card p:not(.eyebrow) {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.7;
 }
 .side-card .small {
-  font-size: 10px !important;
+  font-size: 14px !important;
   margin: 11px 0 0;
 }
 .damage-meter {
@@ -490,7 +486,7 @@ aside {
   gap: 6px;
 }
 .below span {
-  font-size: 10px;
+  font-size: 14px;
   color: var(--muted);
   margin-left: 5px;
 }
@@ -557,10 +553,10 @@ footer b {
     padding: 12px 5px;
   }
   .hud strong {
-    font-size: 15px;
+    font-size: 20px;
   }
   .hud .hearts {
-    font-size: 11px;
+    font-size: 15px;
   }
   .overlay h2 {
     font-size: 38px;
@@ -587,7 +583,7 @@ footer b {
   }
   .header-actions button {
     padding: 9px;
-    font-size: 8px;
+    font-size: 11px;
   }
   main {
     padding-top: 28px;
@@ -601,7 +597,7 @@ footer b {
     letter-spacing: -3px;
   }
   .intro .eyebrow {
-    font-size: 8px;
+    font-size: 11px;
     letter-spacing: 1px;
     margin-bottom: 15px;
   }
@@ -609,10 +605,10 @@ footer b {
     max-width: 130px;
   }
   .intro-copy p:first-child {
-    font-size: 13px;
+    font-size: 18px;
   }
   .intro-copy p {
-    font-size: 10px;
+    font-size: 14px;
   }
   .edition {
     display: none;
@@ -624,24 +620,24 @@ footer b {
     padding: 5px;
   }
   .hud strong {
-    font-size: 14px;
+    font-size: 19px;
   }
   .hud div > span {
-    font-size: 8px;
+    font-size: 11px;
     letter-spacing: 1px;
   }
   .hud .hearts {
-    font-size: 10px;
+    font-size: 14px;
   }
   .hud button {
-    font-size: 13px;
+    font-size: 18px;
     padding: 6px 9px;
   }
   .hud {
     padding: 10px 7px 15px;
   }
   .cabinet-bottom {
-    font-size: 6px;
+    font-size: 8px;
     letter-spacing: 0.3px;
   }
   .touch-controls {
@@ -652,7 +648,7 @@ footer b {
     margin-bottom: 12px;
   }
   .overlay .eyebrow {
-    font-size: 7px;
+    font-size: 9px;
     margin-bottom: 10px;
   }
   .overlay .pixel-icon {
@@ -660,16 +656,16 @@ footer b {
     margin-bottom: 8px;
   }
   #overlay-copy {
-    font-size: 11px;
+    font-size: 15px;
     margin-bottom: 15px;
   }
   .primary {
     padding: 12px 18px;
     min-width: 200px;
-    font-size: 10px;
+    font-size: 14px;
   }
   .overlay-foot {
-    font-size: 7px;
+    font-size: 9px;
     margin-top: 16px;
   }
   .side-card {
@@ -685,31 +681,31 @@ footer b {
     display: none;
   }
   .side-card .eyebrow {
-    font-size: 7px;
+    font-size: 9px;
   }
   .drops {
     gap: 13px;
   }
   .drops small {
-    font-size: 9px;
+    font-size: 12px;
   }
   .drops li > span {
-    font-size: 8px;
+    font-size: 11px;
   }
   .drop {
     width: 25px;
     height: 25px;
-    font-size: 17px;
+    font-size: 23px;
   }
   .below {
     margin-bottom: 25px;
     justify-content: center;
   }
   .below span {
-    font-size: 9px;
+    font-size: 12px;
   }
   footer {
-    font-size: 6px;
+    font-size: 8px;
     letter-spacing: 0.5px;
     gap: 12px;
   }
@@ -717,10 +713,10 @@ footer b {
     gap: 4px;
   }
   #records li {
-    font-size: 8px;
+    font-size: 11px;
   }
   .side-card .small {
-    font-size: 9px !important;
+    font-size: 12px !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -729,5 +725,167 @@ footer b {
   *:after {
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Crisp cartridge-era type and stepped cabinet details. */
+.intro h1,
+.overlay h2,
+.side-card h2 {
+  font-family: "Press Start 2P", monospace;
+  font-weight: 400;
+  letter-spacing: -1px;
+  line-height: 1.4;
+  text-shadow: 4px 4px 0 #3f315e;
+}
+.intro h1 {
+  font-size: 42px;
+}
+.overlay h2 {
+  font-size: 23px;
+  line-height: 1.6;
+}
+.side-card h2 {
+  font-size: 17px;
+  line-height: 1.6;
+}
+.intro-copy p {
+  font-size: 20px;
+}
+.intro-copy p:first-child {
+  font-size: 25px;
+}
+button {
+  border-width: 2px;
+  box-shadow:
+    inset 2px 2px #ffffff15,
+    inset -2px -2px #0006;
+}
+.primary {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  line-height: 1.7;
+  box-shadow: 4px 4px 0 #647b2c;
+}
+.cabinet {
+  border: 4px solid #4b4268;
+  box-shadow:
+    8px 8px 0 #04040d,
+    inset 0 0 0 2px #171325;
+}
+.side-card {
+  border: 2px solid #343047;
+  box-shadow: 4px 4px #04040d;
+}
+.overlay {
+  backdrop-filter: none;
+  background: linear-gradient(#0a0a16bb, #0a0a16f5);
+}
+.hud strong {
+  font-family: "VT323", monospace;
+  font-size: 28px;
+  letter-spacing: 1px;
+}
+.side-card p:not(.eyebrow) {
+  font-size: 17px;
+}
+.side-card .small {
+  font-size: 14px !important;
+}
+.drops small {
+  font-size: 14px;
+}
+.record-title .eyebrow {
+  letter-spacing: 0.5px;
+}
+#records li {
+  font-size: 15px;
+}
+@media (min-width: 1400px) {
+  .intro h1 {
+    font-size: 48px;
+  }
+}
+@media (max-width: 960px) {
+  .intro h1 {
+    font-size: 34px;
+  }
+  .intro-copy p {
+    font-size: 17px;
+  }
+  .intro-copy p:first-child {
+    font-size: 21px;
+  }
+  .overlay h2 {
+    font-size: 20px;
+  }
+}
+@media (max-width: 700px) {
+  .intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 15px;
+  }
+  .intro h1 {
+    font-size: 30px;
+    line-height: 1.5;
+  }
+  .intro-copy {
+    max-width: none;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .intro-copy p {
+    font-size: 15px;
+    margin: 0;
+  }
+  .intro-copy p:first-child {
+    font-size: 18px;
+    max-width: 135px;
+  }
+  .hud strong {
+    font-size: 21px;
+  }
+  .hud .hearts {
+    font-size: 14px;
+  }
+  .overlay h2 {
+    font-size: 16px;
+  }
+  .overlay-copy,
+  #overlay-copy {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .primary {
+    font-size: 9px;
+    min-width: 180px;
+  }
+  .side-card .small {
+    font-size: 13px !important;
+  }
+  .drops small {
+    font-size: 12px;
+  }
+  #records li {
+    font-size: 13px;
+  }
+  .side-card {
+    padding: 13px;
+  }
+  .wordmark {
+    font-size: 26px;
+  }
+}
+@media (max-width: 360px) {
+  .intro h1 {
+    font-size: 26px;
+  }
+  .overlay h2 {
+    font-size: 14px;
+  }
+  .overlay-foot {
+    display: none;
   }
 }
