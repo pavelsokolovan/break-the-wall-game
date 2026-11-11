@@ -1047,3 +1047,117 @@ main {
     padding-top: 10px;
   }
 }
+
+/* Duel uses its own logical world; Solo dimensions remain unchanged. */
+[hidden] {
+  display: none !important;
+}
+.mode-selector {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.mode-selector [aria-pressed="true"] {
+  color: var(--lime);
+  border-color: var(--lime);
+}
+.duel-panel {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.duel-panel h2 {
+  font:
+    14px "Press Start 2P",
+    monospace;
+  margin: 10px 0;
+  line-height: 1.8;
+}
+#duel-room-code {
+  color: var(--lime);
+  white-space: nowrap;
+}
+#duel-status {
+  min-height: 1.2em;
+  margin: 8px 0;
+  font-size: 20px;
+}
+.duel-connect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+.duel-connect p {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 22px;
+}
+#duel-code {
+  width: 135px;
+  padding: 10px;
+  font:
+    24px "VT323",
+    monospace;
+  color: var(--lime);
+  background: #151522;
+  border: 1px solid var(--border);
+  text-transform: uppercase;
+}
+.duel-room-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.duel-hud {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 6px;
+  font-size: 20px;
+}
+.duel-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto 6px;
+  touch-action: none;
+  border: 1px solid var(--border);
+  image-rendering: pixelated;
+}
+main:has(#duel-panel:not([hidden])) {
+  padding-top: 10px;
+}
+@media (max-height: 500px) {
+  body:has(#duel-panel:not([hidden])) header {
+    height: 40px;
+  }
+  .duel-panel h2 {
+    font-size: 10px;
+    margin: 0;
+  }
+  .duel-panel #duel-status {
+    font-size: 16px;
+    margin: 2px 0;
+  }
+  .duel-room-actions {
+    margin: 0;
+  }
+  .duel-room-actions button,
+  .mode-selector button,
+  #duel-action {
+    padding: 6px 10px;
+  }
+  .duel-hud {
+    padding: 2px;
+    font-size: 16px;
+  }
+  .mode-selector {
+    margin-bottom: 2px;
+  }
+}

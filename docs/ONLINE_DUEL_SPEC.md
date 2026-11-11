@@ -1,6 +1,7 @@
 # Online Duel implementation specification
 
-Status: implementation handoff, not implemented. Prepared 2026-11-11.
+Status: Stages 1–6 implemented locally; Stages 7–10 pending. Not deployed.
+Original handoff prepared 2026-11-11. See [the staged roadmap](ONLINE_DUEL_ROADMAP.md) for progress.
 
 Repository: https://github.com/pavelsokolovan/break-the-wall-game
 Frontend: https://pavelsokolovan.github.io/break-the-wall-game/
@@ -10,6 +11,25 @@ Baseline: `894b22a` — single-player game including sticky paddle and bazooka.
 
 Add competitive online play for two people on different phones. Paddles occupy opposite ends of one shared field. Both internet connections and the same Wi-Fi with internet access must work. Preserve the existing single-player mode and its saves.
 
+### Permanent two-mode requirement
+
+The product must keep **Solo (single player)** and add **Online Duel (two online players)**
+as separate, explicitly selectable modes. Online Duel is an addition to Solo, never a
+replacement. This requirement applies to every implementation stage and release.
+
+- Solo retains its existing ten-level campaign, controls, bonuses, scores, settings and
+  `brickfall-blitz:v1` saves. It requires no room, account, WebSocket connection, or
+  running multiplayer backend; it must work when the backend is missing or unavailable.
+- Online Duel uses the separate authoritative `DuelGame` and server for exactly two
+  players in private rooms. Online rules, failures and later reconnect logic must not
+  change Solo simulation or write into Solo records. Future duel history has its own key.
+- The interface offers clear Solo and Online Duel choices. Entering Online Duel pauses
+  an active Solo run; returning keeps it paused until the player explicitly resumes.
+  Leaving a live duel requires confirmation and follows the duel forfeit policy.
+- Every stage runs Solo regressions as well as its duel tests. Final acceptance includes
+  both mode choices, preserved Solo saves, Solo play without a backend, and a complete
+  two-client Online Duel match. Deployment must keep Solo available throughout.
+
 The user selected competitive play, requested a free hosting plan, and approved preparing this handoff. The implementation below resolves remaining design choices into explicit defaults; these may be tuned through playtesting without redesigning the architecture.
 
 - GitHub Pages hosts the existing browser client; GitHub Actions deploys it.
@@ -17,7 +37,7 @@ The user selected competitive play, requested a free hosting plan, and approved 
 - No paid database, account system, custom domain, matchmaking service, or subscription is needed.
 - Two-player private rooms, room codes, shareable links, readiness, first-to-five goals, rematch, and reconnect are in scope.
 - Keep the pixel graphics, local results, minimal interface, existing hazards, bonuses, and contact-time paddle physics.
-- No implementation or hosting changes are part of this specification commit.
+- Preserve both modes throughout the staged implementation. Hosted deployment remains a later stage.
 
 ## 2. Existing project and development constraints
 
@@ -25,15 +45,15 @@ The repository uses JavaScript ES modules, Vite, Canvas 2D, and ordinary HTML/CS
 
 Relevant files:
 
-| File | Current responsibility |
-| --- | --- |
-| `src/game.js` | Pure solo simulation; seeded RNG; wall generation; brick damage; drops; paddle bounce; sticky catches; bazooka shots |
-| `src/main.js` | Canvas renderer, input, Web Audio, local saves, overlays and information panels |
-| `src/style.css` | Responsive pixel arcade interface |
-| `index.html` | Cabinet, menus, legend and scores dialog |
-| `tests/game.test.js` | Solo simulation tests |
-| `tests/interface.test.js` | Happy DOM interface tests, including touch tap versus drag |
-| `.github/workflows/deploy.yml` | Check, test, build, publish `dist/` to GitHub Pages |
+| File                           | Current responsibility                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `src/game.js`                  | Pure solo simulation; seeded RNG; wall generation; brick damage; drops; paddle bounce; sticky catches; bazooka shots |
+| `src/main.js`                  | Canvas renderer, input, Web Audio, local saves, overlays and information panels                                      |
+| `src/style.css`                | Responsive pixel arcade interface                                                                                    |
+| `index.html`                   | Cabinet, menus, legend and scores dialog                                                                             |
+| `tests/game.test.js`           | Solo simulation tests                                                                                                |
+| `tests/interface.test.js`      | Happy DOM interface tests, including touch tap versus drag                                                           |
+| `.github/workflows/deploy.yml` | Check, test, build, publish `dist/` to GitHub Pages                                                                  |
 
 Current commands: `npm ci`, `npm run dev`, `npm run check`, `npm test`, and `npm run build -- --base=/break-the-wall-game/`. Baseline has 27 passing tests. Fonts are bundled locally; retain their license notices. No game-code license has been chosen.
 
@@ -106,21 +126,21 @@ Drops belong to the player credited with destroying the brick, including hazards
 
 Roll once per destroyed breakable brick on the server:
 
-| Outcome | Chance | Duel behavior |
-| --- | ---: | --- |
-| Nothing | 56% | No drop |
-| Sticky | 3% | Refill to three catches |
-| Bazooka | 3% | +5 shots, maximum 15 |
-| Gem | 10% | +500 points |
-| Wide | 5% | Current base paddle width ×1.5 for 12 seconds |
-| Slow | 6% | Owner's balls run at 65% speed for 10 seconds |
-| Shield | 3% | One hazard hit, expires after 15 seconds |
-| Multiball | 4% | Add up to two balls, respecting the global three-ball cap |
-| Repair | 1% | Remove one damage increment; if undamaged, award 1,000 points |
-| Vest | 3% | Refill to two hazard-block charges |
-| Bomb | 2% | Falls at 150 pixels/second toward owner |
-| Rocket | 2% | Falls at 260 pixels/second toward owner |
-| Worm | 2% | Falls at 110 pixels/second with sideways weaving |
+| Outcome   | Chance | Duel behavior                                                 |
+| --------- | -----: | ------------------------------------------------------------- |
+| Nothing   |    56% | No drop                                                       |
+| Sticky    |     3% | Refill to three catches                                       |
+| Bazooka   |     3% | +5 shots, maximum 15                                          |
+| Gem       |    10% | +500 points                                                   |
+| Wide      |     5% | Current base paddle width ×1.5 for 12 seconds                 |
+| Slow      |     6% | Owner's balls run at 65% speed for 10 seconds                 |
+| Shield    |     3% | One hazard hit, expires after 15 seconds                      |
+| Multiball |     4% | Add up to two balls, respecting the global three-ball cap     |
+| Repair    |     1% | Remove one damage increment; if undamaged, award 1,000 points |
+| Vest      |     3% | Refill to two hazard-block charges                            |
+| Bomb      |     2% | Falls at 150 pixels/second toward owner                       |
+| Rocket    |     2% | Falls at 260 pixels/second toward owner                       |
+| Worm      |     2% | Falls at 110 pixels/second with sideways weaving              |
 
 The solo life pickup becomes **Repair** in duels; do not introduce an extra-life counter. Suppress a hazard roll when three hazards for that owner are already active. Repeated wide/slow/shield pickups refresh, not stack, duration. Unused vest/sticky charges persist until consumed or rally reset.
 

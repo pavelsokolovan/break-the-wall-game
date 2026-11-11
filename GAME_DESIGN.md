@@ -10,6 +10,14 @@ Previous update: minimal game screen with scores and legend panels; fast rockets
 
 Previous implementation update: JavaScript ES modules with Vite; pixel fonts Press Start 2P and VT323. The paddle starts at 160 pixels and loses 20 pixels per failure down to 100. Failures add 12% speed each (maximum 36%); new levels reset damage and speed penalty. Slow pickups apply a 35% reduction for 10 seconds. Bricks are 86 × 32 pixels; ball radius is 10 pixels. Six procedural wall silhouettes replace the original fixed layouts. Drop odds: nothing 68%, gem 10%, wide 5%, slow 6%, shield 3%, multiball 4%, life 1%, bomb 3%. These implemented values supersede the original proposal below. Results and settings are saved locally.
 
+## Permanent game modes
+
+Keep this single-player campaign as **Solo**, available without a multiplayer backend.
+Add **Online Duel** as a separate mode for exactly two online players; it must never
+replace Solo or alter Solo's existing saves. The [Online Duel specification](docs/ONLINE_DUEL_SPEC.md)
+and [staged roadmap](docs/ONLINE_DUEL_ROADMAP.md) govern the additional online mode and
+require Solo regression checks at every stage.
+
 ## 1. Concept and goal
 
 A single-player arcade brick breaker. The player moves a small paddle along the bottom of the screen, bouncing a ball into a wall of bricks above. Broken bricks award points and sometimes drop prizes or dangerous bombs. Clear every breakable brick to advance; finish all ten levels to win.
@@ -43,13 +51,13 @@ The central decision is whether to chase a falling reward or stay in position to
 
 ## 4. Bricks and points
 
-| Brick | Durability | Points on destruction | Behavior |
-|---|---:|---:|---|
-| Standard | 1 | 100 | Common colored brick |
-| Armored | 2 | 250 | Visible crack after first hit |
-| Reinforced | 3 | 450 | Visible damage at each stage |
-| Explosive | 1 | 150 | Deals one damage to all adjacent bricks, including diagonals; can trigger other explosive bricks |
-| Steel | Indestructible | 0 | Reflects ball; excluded from level completion |
+| Brick      |     Durability | Points on destruction | Behavior                                                                                         |
+| ---------- | -------------: | --------------------: | ------------------------------------------------------------------------------------------------ |
+| Standard   |              1 |                   100 | Common colored brick                                                                             |
+| Armored    |              2 |                   250 | Visible crack after first hit                                                                    |
+| Reinforced |              3 |                   450 | Visible damage at each stage                                                                     |
+| Explosive  |              1 |                   150 | Deals one damage to all adjacent bricks, including diagonals; can trigger other explosive bricks |
+| Steel      | Indestructible |                     0 | Reflects ball; excluded from level completion                                                    |
 
 Only destruction awards brick points; nonlethal hits do not. Explosive damage uses a queue so each destroyed explosive brick detonates once. Blast-destroyed bricks award points and can drop items using the same rules as ball-destroyed bricks. Steel blocks blasts.
 
@@ -67,16 +75,16 @@ Only destruction awards brick points; nonlethal hits do not. Explosive damage us
 
 Each destroyed breakable brick independently rolls one outcome. The probabilities below sum to 100%; a brick drops at most one item. Drops fall at 150 pixels/second. Missing a prize or letting a bomb leave the screen has no penalty.
 
-| Outcome | Probability | Effect when caught |
-|---|---:|---|
-| Nothing | 72% | No item |
-| Prize gem | 10% | +500 points |
-| Wide paddle | 5% | Paddle becomes 180 pixels wide for 12 seconds |
-| Slow ball | 4% | All active balls move at 75% of current normal speed for 10 seconds |
-| Shield | 3% | Absorbs one bomb hit; expires after 15 seconds |
-| Multiball | 2% | Adds two balls, up to three total |
-| Extra life | 1% | +1 life, maximum five; at the cap, awards 1,000 points instead |
-| Bomb | 3% | Costs one life unless shielded |
+| Outcome     | Probability | Effect when caught                                                  |
+| ----------- | ----------: | ------------------------------------------------------------------- |
+| Nothing     |         72% | No item                                                             |
+| Prize gem   |         10% | +500 points                                                         |
+| Wide paddle |          5% | Paddle becomes 180 pixels wide for 12 seconds                       |
+| Slow ball   |          4% | All active balls move at 75% of current normal speed for 10 seconds |
+| Shield      |          3% | Absorbs one bomb hit; expires after 15 seconds                      |
+| Multiball   |          2% | Adds two balls, up to three total                                   |
+| Extra life  |          1% | +1 life, maximum five; at the cap, awards 1,000 points instead      |
+| Bomb        |          3% | Costs one life unless shielded                                      |
 
 - Prizes mean in-game rewards and collectible gems; no real-money prizes or purchases in the first release.
 - Bombs have a distinctive spiked silhouette, warning icon, and fuse animation. Rewards use different shapes as well as colors.
@@ -93,18 +101,18 @@ Each destroyed breakable brick independently rolls one outcome. The probabilitie
 
 Ten authored levels form one campaign. No time limit. Clear time is shown as a personal statistic, not used to penalize the player.
 
-| Level | Layout theme | New challenge |
-|---:|---|---|
-| 1 | First Contact | Four rows of standard bricks; learn aiming and drops |
-| 2 | Split Wall | Gaps and first armored bricks |
-| 3 | Chain Reaction | First explosive bricks |
-| 4 | Steel Gates | First steel obstacles; preserve routes to every target |
-| 5 | Fortress | Introduce reinforced bricks |
-| 6 | Crossfire | Staggered walls and narrow entry lanes |
-| 7 | Vault | Armored clusters around explosive bricks |
-| 8 | Labyrinth | Steel corridors with multiple reachable entrances |
-| 9 | Reactor | Dense explosive chains and reinforced barriers |
-| 10 | Final Breach | A balanced combination of all brick types |
+| Level | Layout theme   | New challenge                                          |
+| ----: | -------------- | ------------------------------------------------------ |
+|     1 | First Contact  | Four rows of standard bricks; learn aiming and drops   |
+|     2 | Split Wall     | Gaps and first armored bricks                          |
+|     3 | Chain Reaction | First explosive bricks                                 |
+|     4 | Steel Gates    | First steel obstacles; preserve routes to every target |
+|     5 | Fortress       | Introduce reinforced bricks                            |
+|     6 | Crossfire      | Staggered walls and narrow entry lanes                 |
+|     7 | Vault          | Armored clusters around explosive bricks               |
+|     8 | Labyrinth      | Steel corridors with multiple reachable entrances      |
+|     9 | Reactor        | Dense explosive chains and reinforced barriers         |
+|    10 | Final Breach   | A balanced combination of all brick types              |
 
 - Starting normal ball speed on level N: min(360 + 25 × (N − 1), 585) pixels/second.
 - Every ten paddle returns adds 3% of that level's starting speed, capped at 120% of starting speed. Reset this increase on life loss or level change.

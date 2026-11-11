@@ -1,7 +1,13 @@
+import { HAZARDS, dropType } from "../shared/drops.js";
+export { HAZARDS, dropType } from "../shared/drops.js";
+import { makeLevel } from "../shared/levels.js";
+export { COLORS, WALL_SHAPES, makeLevel } from "../shared/levels.js";
+import { paddleBounce } from "../shared/game-helpers.js";
+export { seeded, paddleBounce } from "../shared/game-helpers.js";
+
 export const W = 800,
   H = 640,
   PADDLE_Y = 586;
-export const COLORS = ["#c49aff", "#ff7695", "#ffb570", "#d3fa65", "#66dfd1"];
 export const THEMES = [
   "FIRST CONTACT",
   "SPLIT WALL",
@@ -14,114 +20,10 @@ export const THEMES = [
   "REACTOR",
   "FINAL BREACH",
 ];
-export function seeded(seed) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-export const WALL_SHAPES = [
-  "DIAMOND",
-  "SPACE INVADER",
-  "CHEVRON",
-  "TWIN TOWERS",
-  "WAVE",
-  "PORTAL",
-];
-export function makeLevel(n, random = Math.random) {
-  const bricks = [],
-    rows = Math.min(4 + Math.floor(n / 3), 6);
-  const shape = Math.floor(random() * WALL_SHAPES.length);
-  const phase = Math.floor(random() * 3);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < 8; c++) {
-      const d = Math.abs(c - 3.5),
-        mid = (rows - 1) / 2;
-      const masks = [
-        d <= 3.8 - Math.abs(r - mid),
-        r === 0
-          ? d > 0.5 && d < 3.5
-          : r === rows - 1
-            ? c % 3 !== 1
-            : r === 1
-              ? d < 2.6
-              : true,
-        Math.abs(r - d * 0.65) < 1.7,
-        d >= 1 || r === 0 || r === rows - 1,
-        r >= Math.floor((Math.sin((c + phase) * 0.9) + 1) * 0.9),
-        r === 0 || r === rows - 1 || d > 1.5,
-      ];
-      if (!masks[shape]) continue;
-      let type =
-        n >= 3 && random() < 0.16
-          ? "explosive"
-          : n >= 5 && (r + c + phase) % 5 === 0
-            ? "reinforced"
-            : n >= 2 && (r + c + phase) % 3 === 0
-              ? "armored"
-              : "standard";
-      // Isolated steel cells cannot enclose targets or seal a passage.
-      if (n >= 4 && r === 1 && (c === 2 || c === 5)) type = "steel";
-      const hp =
-        type === "steel"
-          ? Infinity
-          : type === "reinforced"
-            ? 3
-            : type === "armored"
-              ? 2
-              : 1;
-      bricks.push({
-        id: r * 8 + c,
-        r,
-        c,
-        x: 28 + c * 94,
-        y: 66 + r * 40,
-        w: 86,
-        h: 32,
-        type,
-        hp,
-        maxHp: hp,
-        color: COLORS[(r + phase) % COLORS.length],
-      });
-    }
-  }
-  bricks.shape = WALL_SHAPES[shape];
-  return bricks;
-}
 export function circleRect(ball, rect) {
   const x = Math.max(rect.x, Math.min(ball.x, rect.x + rect.w));
   const y = Math.max(rect.y, Math.min(ball.y, rect.y + rect.h));
   return (ball.x - x) ** 2 + (ball.y - y) ** 2 <= ball.r ** 2;
-}
-export const HAZARDS = new Set(["bomb", "rocket", "worm"]);
-export function paddleBounce(offset, velocity) {
-  let angle = Math.max(-1.13, Math.min(1.13, offset * 1.13));
-  if (Math.abs(angle) < 0.26) angle = 0.26 * (angle < 0 ? -1 : 1);
-  // Slow strokes keep contact-position aiming; fast strokes transfer lateral momentum.
-  const stroke =
-    (Math.sign(velocity) * Math.max(0, Math.abs(velocity) - 80)) / 1120;
-  angle = Math.max(-1.13, Math.min(1.13, angle + stroke * 0.9));
-  if (Math.abs(angle) < 0.12) angle = 0.12 * (angle < 0 ? -1 : 1);
-  return angle;
-}
-export function dropType(roll, hazardsFull) {
-  if (roll < 0.56) return null;
-  if (roll < 0.59) return "sticky";
-  if (roll < 0.62) return "bazooka";
-  if (roll < 0.72) return "gem";
-  if (roll < 0.77) return "wide";
-  if (roll < 0.83) return "slow";
-  if (roll < 0.86) return "shield";
-  if (roll < 0.9) return "multi";
-  if (roll < 0.91) return "life";
-  if (roll < 0.94) return "vest";
-  if (hazardsFull) return null;
-  if (roll < 0.96) return "bomb";
-  if (roll < 0.98) return "rocket";
-  return "worm";
 }
 export class Game {
   constructor({ random = Math.random, event = () => {} } = {}) {

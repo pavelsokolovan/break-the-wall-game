@@ -26,7 +26,11 @@
         </div>
       </header>
       <main>
-        <div class="arcade-layout">
+        <nav class="mode-selector" aria-label="Game mode">
+          <button id="solo-mode" aria-pressed="true">SOLO</button>
+          <button id="online-mode" aria-pressed="false">ONLINE DUEL</button>
+        </nav>
+        <div id="solo-panel" class="arcade-layout">
           <section class="cabinet" aria-label="Game cabinet">
             <div class="hud">
               <div><span>SCORE</span><strong id="score">000000</strong></div>
@@ -69,10 +73,57 @@
             </div>
           </section>
         </div>
-        <nav class="game-tools" aria-label="Game information">
+        <nav id="solo-tools" class="game-tools" aria-label="Game information">
           <button id="legend-button" aria-haspopup="dialog">? LEGEND</button>
           <button id="scores-button" aria-haspopup="dialog">★ SCORES</button>
         </nav>
+        <section
+          id="duel-panel"
+          class="duel-panel"
+          aria-label="Online Duel"
+          hidden
+        >
+          <h2>ONLINE DUEL <span id="duel-room-code"></span></h2>
+          <p id="duel-status" role="status" aria-live="polite"></p>
+          <form id="duel-connect" class="duel-connect">
+            <button id="duel-create" type="button">CREATE ROOM</button>
+            <label for="duel-code">ROOM CODE</label>
+            <input
+              id="duel-code"
+              maxlength="6"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="ABC234"
+            />
+            <button id="duel-join" type="submit">JOIN ROOM</button>
+            <p>
+              First to five goals. Break walls, catch your rewards, and dodge
+              your hazards. Repair fixes damage; armor protects against hazards,
+              not goals. Serves are automatic. Sticky holds balls up to three
+              seconds; tap or Space releases and fires. F fires only. Multiball
+              shares a three-ball cap.
+            </p>
+          </form>
+          <p id="duel-slots"></p>
+          <div class="duel-room-actions">
+            <button id="duel-ready" type="button" hidden>READY</button>
+            <button id="duel-leave" type="button" hidden>LEAVE ROOM</button>
+          </div>
+          <div id="duel-hud" class="duel-hud" hidden>
+            <strong id="duel-goals"></strong><span id="duel-points"></span>
+          </div>
+          <canvas
+            id="duel-game"
+            class="duel-canvas"
+            width="800"
+            height="1000"
+            tabindex="0"
+            aria-label="Online Duel. Your paddle is at the bottom. Move with mouse, drag, arrows, A or D. First to five goals wins."
+            hidden
+          ></canvas>
+          <button id="duel-action" type="button" hidden>RELEASE / FIRE</button>
+        </section>
       </main>
     </div>
     <div

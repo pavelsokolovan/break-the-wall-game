@@ -1,7 +1,13 @@
+import { drawPaddleGear, drawShot } from "./weapon-drawing.js";
+import { drawDrop } from "./drop-drawing.js";
+import { drawBrick } from "./brick-drawing.js";
+import { pixelRect } from "./pixel-drawing.js";
+import { mountMultiplayer } from "./multiplayer-ui.js";
 import { Game, W, H, PADDLE_Y, COLORS, THEMES } from "./game.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("game"),
   ctx = canvas.getContext("2d");
+let onlineActive = false;
 const STORE = "brickfall-blitz:v1";
 function readSave() {
   try {
@@ -105,6 +111,9 @@ function sound(name) {
         tone(f, 0.25, "square", 0.03, i * 0.12),
       );
       break;
+    case "fire":
+      tone(150, 0.14, "sawtooth", 0.025, 0, 60);
+      break;
     case "launch":
       tone(260, 0.12, "square", 0.025, 0, 880);
       break;
@@ -185,7 +194,6 @@ const game = new Game({
         sound("pickup");
         break;
       case "fire":
-        tone(150, 0.14, "sawtooth", 0.025, 0, 60);
         burst(data.x, data.y, "#ffb570", 8);
         break;
       case "intercept":
@@ -393,6 +401,7 @@ panel.onclick = (e) => {
 };
 const keys = new Set();
 window.addEventListener("keydown", (e) => {
+  if (onlineActive) return;
   if (!panel.hidden) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -481,8 +490,7 @@ canvas.addEventListener("pointercancel", () => {
   paddleTap = null;
 });
 function rect(x, y, w, h, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  pixelRect(ctx, x, y, w, h, color);
 }
 function label(text, x, y, color, size = 12, align = "center") {
   ctx.font = `${size * 1.35}px "VT323", monospace`;
@@ -490,72 +498,6 @@ function label(text, x, y, color, size = 12, align = "center") {
   ctx.fillStyle = color;
   ctx.fillText(text, Math.round(x), Math.round(y));
 }
-function drawBrick(b) {
-  if (b.hp <= 0) return;
-  const { x, y, w, h, type } = b;
-  const color =
-    type === "steel"
-      ? "#8798b5"
-      : type === "explosive"
-        ? "#ff9c42"
-        : type === "reinforced"
-          ? "#b38aff"
-          : b.color;
-  rect(x + 4, y + 4, w, h, "#0009");
-  rect(x, y, w, h, "#171827");
-  rect(x + 3, y + 3, w - 6, h - 6, color);
-  rect(x + 6, y + 3, w - 12, 4, "#ffffff66");
-  rect(x + 3, y + h - 7, w - 6, 4, "#0005");
-  if (type === "steel") {
-    // Riveted steel with diagonal hazard slots.
-    for (let k = 14; k < w - 12; k += 12) {
-      rect(x + k, y + 11, 5, 12, "#3c4b63");
-      rect(x + k + 4, y + 7, 5, 8, "#3c4b63");
-    }
-    for (const dx of [6, w - 10])
-      for (const dy of [6, h - 10]) rect(x + dx, y + dy, 4, 4, "#e3edff");
-  } else if (type === "reinforced") {
-    // Three nested armor plates, removed as durability falls.
-    for (let k = 0; k < b.hp; k++) {
-      const dx = x + 13 + k * 20;
-      rect(dx, y + 9, 16, 15, "#533783");
-      rect(dx + 3, y + 12, 10, 8, "#d8b5ff");
-    }
-  } else if (type === "armored") {
-    // Bolted panel and horizontal plating seam.
-    rect(x + 9, y + 15, w - 18, 3, "#28213c88");
-    for (const dx of [8, w - 12]) rect(x + dx, y + 11, 4, 10, "#f4f0df");
-    rect(x + w / 2 - 7, y + 10, 14, 12, "#28213c");
-    rect(x + w / 2 - 3, y + 13, 6, 6, color);
-  } else if (type === "explosive") {
-    // Pixel dynamite bundle and a fuse, readable without color.
-    for (let k = 0; k < 3; k++)
-      rect(x + w / 2 - 13 + k * 9, y + 11, 7, 14, "#a22b3f");
-    rect(x + w / 2 - 15, y + 17, 32, 4, "#ffe9a1");
-    rect(x + w / 2 + 5, y + 7, 4, 5, "#fff6c7");
-  } else {
-    // Classic staggered masonry seam.
-    rect(x + 5, y + 16, w - 10, 2, "#0003");
-    rect(x + w / 2, y + 7, 2, 9, "#0003");
-  }
-  if (b.hp < b.maxHp) {
-    rect(x + w - 27, y + 3, 4, 10, "#191628");
-    rect(x + w - 31, y + 11, 8, 4, "#191628");
-    rect(x + w - 31, y + 14, 4, 12, "#191628");
-  }
-}
-const icons = {
-  gem: "◆",
-  wide: "↔",
-  slow: "S",
-  shield: "◇",
-  multi: "···",
-  life: "♥",
-  bomb: "✹",
-  vest: "V",
-  sticky: "U",
-  bazooka: "B",
-};
 function draw() {
   ctx.clearRect(0, 0, W, H);
   rect(0, 0, W, H, "#0b0b1b");
@@ -586,7 +528,7 @@ function draw() {
   ctx.save();
   if (shake > 0 && save.motion)
     ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-  for (const b of game.bricks) drawBrick(b);
+  for (const b of game.bricks) drawBrick(ctx, b);
   if (game.combo >= 5) {
     label(
       `${Math.min(4, 1 + Math.floor(game.combo / 5))}× COMBO`,
@@ -597,81 +539,8 @@ function draw() {
     );
     label(`${game.combo} BRICKS IN A ROW`, W / 2, 401, "#9891aa", 10);
   }
-  for (const d of game.drops) {
-    const color =
-      d.type === "bomb"
-        ? "#ff7695"
-        : d.type === "life"
-          ? "#d3fa65"
-          : d.type === "gem"
-            ? "#c49aff"
-            : d.type === "vest"
-              ? "#ffb570"
-              : "#66dfd1";
-    if (d.type === "rocket") {
-      rect(d.x - 7, d.y - 15, 14, 28, "#ff7695");
-      rect(d.x - 4, d.y + 13, 8, 5, "#d7f2ff");
-      rect(d.x - 13, d.y - 10, 6, 12, "#b38aff");
-      rect(d.x + 7, d.y - 10, 6, 12, "#b38aff");
-      rect(
-        d.x - 4,
-        d.y - 23,
-        8,
-        8,
-        Math.sin(t * 30) > 0 ? "#ffb570" : "#fff0ae",
-      );
-    } else if (d.type === "worm") {
-      for (let k = 0; k < 5; k++)
-        rect(
-          d.x - 24 + k * 10,
-          d.y + Math.sin(t * 10 + k) * 4 - 5,
-          10,
-          10,
-          k === 4 ? "#ffb570" : "#ff7695",
-        );
-      rect(d.x + 19, d.y + Math.sin(t * 10 + 4) * 4 - 3, 3, 3, "#191827");
-    } else if (d.type === "bomb") {
-      rect(d.x - 9, d.y - 9, 18, 18, "#ff7695");
-      rect(d.x - 5, d.y - 13, 10, 4, "#ffb570");
-      rect(
-        d.x + 3,
-        d.y - 18,
-        3,
-        5,
-        Math.sin(t * 20) > 0 ? "#fff0ae" : "#ff7695",
-      );
-      label("×", d.x, d.y + 6, "#391b32", 20);
-    } else {
-      rect(d.x - 12, d.y - 12, 24, 24, color);
-      rect(d.x - 10, d.y - 10, 20, 20, "#17162b");
-      if (d.type === "vest") {
-        rect(d.x - 8, d.y - 8, 5, 7, color);
-        rect(d.x + 3, d.y - 8, 5, 7, color);
-        rect(d.x - 8, d.y - 1, 16, 11, color);
-        rect(d.x - 1, d.y - 1, 2, 11, "#573b36");
-        rect(d.x - 6, d.y + 3, 4, 4, "#be6b35");
-        rect(d.x + 2, d.y + 3, 4, 4, "#be6b35");
-      } else if (d.type === "bazooka") {
-        rect(d.x - 7, d.y - 8, 14, 7, "#ffb570");
-        rect(d.x - 3, d.y - 1, 6, 10, "#ffb570");
-      } else if (d.type === "sticky") {
-        rect(d.x - 8, d.y - 8, 5, 16, "#b38aff");
-        rect(d.x + 3, d.y - 8, 5, 16, "#b38aff");
-        rect(d.x - 8, d.y + 4, 16, 5, "#b38aff");
-      } else if (d.type === "multi") {
-        for (const [dx, dy] of [
-          [-6, 4],
-          [6, 4],
-          [0, -5],
-        ])
-          rect(d.x + dx - 3, d.y + dy - 3, 6, 6, color);
-      } else label(icons[d.type], d.x, d.y + 6, color, 19);
-    }
-  }
-  for (const shot of game.shots) {
-    rect(shot.x - 4, shot.y - 10, 8, 17, "#ffe7ad");
-    rect(shot.x - 3, shot.y + 7, 6, 10, "#ff7695");
-  }
+  for (const d of game.drops) drawDrop(ctx, d, { time: t });
+  for (const shot of game.shots) drawShot(ctx, shot);
   const p = game.paddle;
   ctx.shadowColor = "#d3fa65";
   ctx.shadowBlur = save.motion ? 16 : 0;
@@ -680,14 +549,11 @@ function draw() {
   rect(p.x - p.w / 2 + 4, PADDLE_Y + 3, p.w - 8, 3, "#f3ffc4");
   rect(p.x - p.w / 2, PADDLE_Y, 10, 18, "#88b73f");
   rect(p.x + p.w / 2 - 10, PADDLE_Y, 10, 18, "#88b73f");
-  if (game.ammo > 0) {
-    rect(p.x - 8, PADDLE_Y - 21, 16, 22, "#ffb570");
-    rect(p.x - 11, PADDLE_Y - 24, 22, 7, "#e1e5db");
-    rect(p.x - 5, PADDLE_Y - 21, 10, 5, "#32304b");
-  }
-  if (game.stickyCharges > 0) {
-    rect(p.x - p.w / 2 + 10, PADDLE_Y, p.w - 20, 3, "#b38aff");
-  }
+  drawPaddleGear(
+    ctx,
+    { x: p.x, y: PADDLE_Y, w: p.w, h: 18 },
+    { ammo: game.ammo, stickyCharges: game.stickyCharges },
+  );
   if (game.vestCharges > 0) {
     for (let k = 0; k < game.vestCharges; k++)
       rect(p.x - 14 + k * 18, PADDLE_Y + 5, 12, 9, "#be6b35");
@@ -830,3 +696,12 @@ function frame(now) {
 settings();
 renderRecords();
 requestAnimationFrame(frame);
+
+mountMultiplayer({
+  onModeChange(active) {
+    if (active) backgroundPause();
+    onlineActive = active;
+  },
+  onUserGesture: audio,
+  onSound: sound,
+});

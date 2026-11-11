@@ -4,32 +4,37 @@
 
 A browser arcade game with original pixel graphics, synthesized chiptune sounds, ten levels with randomly generated diamond, invader, chevron, twin-tower, wave, and portal walls, explosive bricks, power-ups, and local high scores. Built with JavaScript, Canvas 2D, and Vite; no game engine or server required.
 
+The game has two separate modes: **Solo**, the existing single-player campaign, and
+**Online Duel**, the additional two-player online mode. Solo stays available without
+a multiplayer backend and keeps its existing saves. Online Duel is currently a local
+preview; reconnect/session reliability and hosted deployment remain later stages.
+
 ## Play
 
 Once GitHub Pages is configured and the project is pushed to `main`:
 
 https://pavelsokolovan.github.io/break-the-wall-game/
 
-| Action | Desktop | Mobile |
-| --- | --- | --- |
-| Move paddle | Mouse, ← / →, A / D | Drag in the game field |
-| Launch ball | Click or Space | Launch Ball button |
-| Pause / resume | P, Escape, or pause button | Pause button |
-| Sound | Header button | Header button |
+| Action         | Desktop                    | Mobile                 |
+| -------------- | -------------------------- | ---------------------- |
+| Move paddle    | Mouse, ← / →, A / D        | Drag in the game field |
+| Launch ball    | Click or Space             | Launch Ball button     |
+| Pause / resume | P, Escape, or pause button | Pause button           |
+| Sound          | Header button              | Header button          |
 
 Hit near the paddle edges to aim diagonally. Clear every breakable brick to advance. Steel bricks are indestructible. Armored bricks need two hits; reinforced bricks need three. Orange explosive bricks damage adjacent bricks and trigger chains.
 
 Start with three lives. Missing the last ball or catching an unprotected bomb, rocket, or worm costs one life and shortens the 160-pixel paddle by 20 pixels, down to a 100-pixel minimum, and adds 12% ball speed (up to 36%). Each new level repairs the paddle and clears the speed penalty. Power-ups disappear on life loss or level completion.
 
-| Drop | Effect |
-| --- | --- |
-| Gem | +500 points |
-| Wide | 50% wider paddle for 12 seconds |
-| Slow | 35% slower balls for 10 seconds |
-| Shield | Absorb one hazard hit within 15 seconds |
-| Vest | Absorb two hazard hits; lasts until consumed, life loss, or level clear |
-| Multiball | Up to three balls |
-| Heart | Extra life, maximum five; +1,000 points at the cap |
+| Drop                 | Effect                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| Gem                  | +500 points                                                                            |
+| Wide                 | 50% wider paddle for 12 seconds                                                        |
+| Slow                 | 35% slower balls for 10 seconds                                                        |
+| Shield               | Absorb one hazard hit within 15 seconds                                                |
+| Vest                 | Absorb two hazard hits; lasts until consumed, life loss, or level clear                |
+| Multiball            | Up to three balls                                                                      |
+| Heart                | Extra life, maximum five; +1,000 points at the cap                                     |
 | Bomb / rocket / worm | Bombs fall; rockets dive faster; worms weave sideways. An unprotected hit costs a life |
 
 Destroy bricks within two seconds to build a combo, up to ×4. Clearing a level awards 1,000 × level + 500 × remaining lives. Clearing without damage adds 2,000 points.
@@ -81,6 +86,65 @@ Sticky pickups recharge three catches. A caught ball follows the paddle at its c
 
 Bazooka pickups add five stored shots, capped at fifteen. The cannon is visible on the paddle while ammunition remains. A paddle tap or Space releases held balls and fires one shot; F fires without releasing. The mobile action button changes to Release / Fire or Fire with the ammo count. Touch drags do not fire. Shots travel upward at 720 pixels/second, with a 250ms cooldown. Each shot destroys one hazard for 100 points or deals one damage to a brick; steel stops shots. Bricks retain their usual scores and explosive reactions. Ammo, shots, and sticky catches reset on life loss or level completion. Pausing freezes shots and cooldowns.
 
-## Planned online multiplayer
+## Online Duel local preview
 
-The implementation handoff for opposite-end competitive play on GitHub Pages + Render Free is in [docs/ONLINE_DUEL_SPEC.md](docs/ONLINE_DUEL_SPEC.md). It defines gameplay, server/client responsibilities, the WebSocket protocol, deployment, and acceptance tests. Multiplayer is not implemented yet.
+[Stage 6](docs/ONLINE_DUEL_STAGE_06_SPEC.md) builds on private rooms and readiness
+with symmetric central walls, opposite paddles, automatic serves, damage, and first-to-five
+results. Break bricks for personal points and independent combos; goals decide the winner.
+Walls include armor, explosive chains, reinforced plates, and isolated steel as waves
+advance. Clearing a wave repairs both paddles and replaces the wall after two seconds
+of active play, waiting until the central band is clear. Each player sees their own paddle at the bottom. Solo remains
+available without a server and keeps its existing saves.
+
+Your brick drops travel toward your own paddle; your opponent cannot collect or take
+hits from them. Catch gems (+500), Wide (12s), Slow (10s), Shield (one hit within 15s),
+Vest (two hits), and Repair (one damage repaired, or +1,000 when undamaged). Slow applies
+to your returns while active; balls keep their current speed until returned. Bombs,
+fast rockets and weaving worms damage the owner once and grant one second of
+invulnerability, keeping the rally alive. Shield blocks before vest; neither stops a
+goal. There are at most three falling hazards per owner. All drop outcomes are enabled.
+
+Sticky refills three catches. Held balls follow your paddle and automatically release
+after three seconds of active play. Tap the paddle, press Space, or use the action
+button to release all held balls and fire once; F fires without releasing. Bazooka
+adds five shots up to fifteen, with a 250ms firing cooldown. Each shot damages one brick
+or intercepts either player's hazard for +100 points. Multiball adds up to two balls,
+owned by the pickup player, sharing a three-ball cap including held balls; at the cap
+it gives +500 points instead. Goals reset weapons and powers; wave advancement preserves
+them. The action button shows current server-confirmed ammo and held-ball state.
+
+Run two terminals after `npm ci`:
+
+```sh
+npm run start:server
+```
+
+```sh
+npm run dev
+```
+
+Open the Vite URL in two tabs. Select **Online Duel**, create a room in one tab, join
+its six-character code in the other, and press **Ready** in both. Move with drag,
+mouse, arrows, or A/D. Serves are automatic; tap/Space releases and fires, F fires only. Leave a live match to forfeit. An unexpected
+disconnect interrupts the match; create a new room to play again.
+
+For LAN development, copy `.env.example` to `.env` and add the frontend's actual LAN
+origin to `ALLOWED_ORIGINS`; both devices need access to frontend port 5173 and server
+port 3001. The development client uses the frontend hostname on port 3001. Production
+requires public `VITE_MULTIPLAYER_URL=wss://<actual-backend>/ws`; without it, Online Duel
+shows an unavailable message. No hosted backend has been provisioned in this stage.
+
+Reconnect/resume, rematches, online pause, invitations, duel history,
+interpolation, and free-host deployment remain in later stages. The preview shows
+latest authoritative snapshots, freezes visibly when stale, and never computes client
+ball collisions or scores. The server enforces Origin checks, message and resource
+limits, input sequencing, bounded send buffers, and idle cleanup. Forwarded IP headers
+are ignored until trusted proxy configuration is implemented.
+
+`npm test` includes real loopback WebSocket clients and UI tests. `npm run test:browser`
+runs the optional two-page Chromium smoke test with portrait/landscape screenshots;
+set `CHROMIUM` if Chromium is installed elsewhere. It requires local port 5173 to be free.
+Physical phones and real internet/network conditions are not yet validated.
+
+The full target is [ONLINE_DUEL_SPEC.md](docs/ONLINE_DUEL_SPEC.md). Delivery stages and
+completed specifications are in [the roadmap](docs/ONLINE_DUEL_ROADMAP.md).
