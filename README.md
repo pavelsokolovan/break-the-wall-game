@@ -80,3 +80,7 @@ Current drop odds: none 56%, sticky 3%, bazooka 3%, gem 10%, wide 5%, slow 6%, s
 Sticky pickups recharge three catches. A caught ball follows the paddle at its contact position and waits for a paddle tap, Space, or the action button. All held balls release together, using the current paddle stroke for aiming. Unused catches persist until consumed, life loss, or level completion.
 
 Bazooka pickups add five stored shots, capped at fifteen. The cannon is visible on the paddle while ammunition remains. A paddle tap or Space releases held balls and fires one shot; F fires without releasing. The mobile action button changes to Release / Fire or Fire with the ammo count. Touch drags do not fire. Shots travel upward at 720 pixels/second, with a 250ms cooldown. Each shot destroys one hazard for 100 points or deals one damage to a brick; steel stops shots. Bricks retain their usual scores and explosive reactions. Ammo, shots, and sticky catches reset on life loss or level completion. Pausing freezes shots and cooldowns.
+
+## Planned online multiplayer
+
+The implementation handoff for opposite-end competitive play on GitHub Pages + Render Free is in [docs/ONLINE_DUEL_SPEC.md](docs/ONLINE_DUEL_SPEC.md). It defines gameplay, server/client responsibilities, the WebSocket protocol, deployment, and acceptance tests. Multiplayer is not implemented yet.
