@@ -208,7 +208,10 @@ export class RoomManager {
       room.manual = null;
     }
     const items = game.drainEvents();
-    if (items.some((e) => ["goal", "rally_replay"].includes(e.type))) {
+    if (
+      game.phase !== "playing" &&
+      items.some((e) => ["goal", "rally_replay"].includes(e.type))
+    ) {
       room.pauseUsed = [false, false];
       this.broadcast(room, this.roomMessage(room));
     }

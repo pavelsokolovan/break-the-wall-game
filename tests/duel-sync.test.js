@@ -196,7 +196,7 @@ test("phase/goal/wave and owner/held/ID changes prevent interpolation across dis
     if (change === "wave") b.state.wave = 2;
     if (change === "owner") b.state.balls[0].owner = 1;
     if (change === "held") b.state.balls[0].held = true;
-    if (change === "id") b.state.balls[0].id++;
+    if (change === "id") b.state.balls[0].id += 100;
     sync.push(a, 0, 0);
     sync.push(b, 50, 0);
     const out = sync.frame(125).snapshot;

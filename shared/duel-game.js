@@ -204,29 +204,31 @@ export class DuelGame {
     );
   }
   serve() {
-    const slot = this.state.servingSlot,
-      p = this.state.players[slot],
-      speed = this.ballSpeed(slot);
-    const direction = slot === 0 ? 1 : -1,
-      angle = (this.serveSign * Math.PI) / 12;
-    this.state.balls.push({
-      id: this.nextEntityId++,
-      x: p.x,
-      y:
-        slot === 0
-          ? R.paddleTopY[0] - R.ballRadius - 1
-          : R.paddleTopY[1] + R.paddleHeight + R.ballRadius + 1,
-      vx: direction * Math.sin(angle) * speed,
-      vy: -direction * Math.cos(angle) * speed,
-      r: R.ballRadius,
-      owner: slot,
-      held: false,
-      heldOffsetX: 0,
-      autoReleaseRemainingMs: 0,
-    });
+    const first = this.state.servingSlot;
+    for (const slot of [first, 1 - first]) {
+      const p = this.state.players[slot],
+        speed = this.ballSpeed(slot);
+      const direction = slot === 0 ? 1 : -1,
+        angle = (this.serveSign * Math.PI) / 12;
+      this.state.balls.push({
+        id: this.nextEntityId++,
+        x: p.x,
+        y:
+          slot === 0
+            ? R.paddleTopY[0] - R.ballRadius - 1
+            : R.paddleTopY[1] + R.paddleHeight + R.ballRadius + 1,
+        vx: direction * Math.sin(angle) * speed,
+        vy: -direction * Math.cos(angle) * speed,
+        r: R.ballRadius,
+        owner: slot,
+        held: false,
+        heldOffsetX: 0,
+        autoReleaseRemainingMs: 0,
+      });
+    }
     this.serveSign *= -1;
     this.phase = "playing";
-    this.emit("serve", { servingSlot: slot });
+    this.emit("serve", { servingSlot: first });
   }
   resetRally() {
     this.comboUntil = [0, 0];
@@ -253,24 +255,25 @@ export class DuelGame {
     this.clearMovement();
   }
   resolveGoals(exits) {
-    if (!exits.size) return;
-    this.resetRally();
-    if (exits.size === 2) {
-      this.emit("rally_replay", { servingSlot: this.state.servingSlot });
-      this.beginCountdown("goal_countdown", R.serveCountdownMs);
+    const scorers = exits instanceof Map ? [...exits.values()] : [...exits];
+    if (!scorers.length) return;
+    for (const scorer of scorers) {
+      const p = this.state.players[1 - scorer];
+      this.state.goals[scorer]++;
+      p.damage = Math.min(3, p.damage + 1);
+      this.state.servingSlot = 1 - scorer;
+      this.updatePaddleWidth(p);
+      this.emit("goal", { scorer, goals: [...this.state.goals] });
+    }
+    // A round always finishes both balls before deciding first-to-five.
+    if (this.state.balls.length) return;
+    const [a, b] = this.state.goals;
+    if (Math.max(a, b) >= R.winningGoals && a !== b) {
+      this.finish(a > b ? 0 : 1, "five_goals");
       return;
     }
-    const scorer = [...exits][0],
-      conceding = 1 - scorer,
-      p = this.state.players[conceding];
-    this.state.goals[scorer]++;
-    p.damage = Math.min(3, p.damage + 1);
-    p.width = R.initialPaddleWidth - p.damage * R.damageWidthDecrement;
-    this.state.servingSlot = conceding;
-    this.emit("goal", { scorer, goals: [...this.state.goals] });
-    if (this.state.goals[scorer] >= R.winningGoals) {
-      this.finish(scorer, "five_goals");
-    } else this.beginCountdown("goal_countdown", R.serveCountdownMs);
+    this.resetRally();
+    this.beginCountdown("goal_countdown", R.serveCountdownMs);
   }
   /** Trusted room-layer terminal hook; no client can choose the winner. */
   finish(winner, reason) {
@@ -383,33 +386,9 @@ export class DuelGame {
           this.releaseHeld(b.owner, true, b.id);
       }
   }
-  splitBalls(owner) {
-    const source = [...this.state.balls].sort((a, b) => a.id - b.id);
-    const base = source.find((b) => b.owner === owner) || source[0];
-    const count = Math.min(2, R.maximumBalls - source.length);
-    if (!base || count <= 0) return 500;
-    const sign = owner === 0 ? 1 : -1,
-      speed = this.ballSpeed(owner);
-    for (const angle of [
-      -WEAPON_RULES.splitAngle,
-      WEAPON_RULES.splitAngle,
-    ].slice(0, count)) {
-      const b = {
-        id: this.nextEntityId++,
-        x: base.x,
-        y: base.y,
-        vx: sign * Math.sin(angle) * speed,
-        vy: -sign * Math.cos(angle) * speed,
-        r: R.ballRadius,
-        owner,
-        held: false,
-        heldOffsetX: 0,
-        autoReleaseRemainingMs: 0,
-      };
-      this.state.balls.push(b);
-      this.emit("ball_split", { ballId: b.id, sourceBallId: base.id, owner });
-    }
-    return 0;
+  splitBalls() {
+    // Compatibility for an already-present pickup: points only in this version.
+    return 500;
   }
 
   updatePaddleWidth(p) {
@@ -683,7 +662,7 @@ export class DuelGame {
     );
     const steps = Math.max(1, Math.ceil((travel * DT) / 4)),
       sub = DT / steps;
-    const exits = new Set(),
+    const exits = new Map(),
       gone = new Set(),
       damaged = new Set(),
       consumedShots = new Set();
@@ -691,11 +670,11 @@ export class DuelGame {
       for (const b of this.state.balls) {
         if (b.held) continue;
         if (b.y - b.r > R.height) {
-          exits.add(1);
+          exits.set(b.id, 1);
           gone.add(b.id);
         }
         if (b.y + b.r < 0) {
-          exits.add(0);
+          exits.set(b.id, 0);
           gone.add(b.id);
         }
       }
@@ -902,6 +881,7 @@ export class DuelGame {
           ? shotBounds(s).y + shotBounds(s).h >= 0
           : shotBounds(s).y <= R.height),
     );
+    this.state.balls = this.state.balls.filter((b) => !gone.has(b.id));
     this.followHeldBalls();
     return exits;
   }
@@ -937,7 +917,7 @@ export class DuelGame {
     }
     this.processActions();
     const exits = this.advanceBalls(starts);
-    this.advanceDrops(starts, exits.size > 0);
+    this.advanceDrops(starts, exits.size > 0 && this.state.balls.length === 0);
     this.resolveGoals(exits);
     if (!exits.size) this.updateWave();
     this.followHeldBalls();

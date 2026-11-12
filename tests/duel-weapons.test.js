@@ -230,68 +230,14 @@ test("held offsets clamp on width expiry/damage, remain attached, and auto-relea
     1,
   );
 });
-test("multiball uses lowest owned ID, otherwise lowest global ID, with owner-directed speed and held cap", () => {
-  for (const owner of [0, 1]) {
-    const g = game();
-    const enemy = ball(g, { owner: 1 - owner, x: 200, y: 250 }),
-      own = held(g, owner, 20);
-    g.state.balls = [own, enemy];
-    g.followHeldBalls();
-    const p = g.state.players[owner];
-    p.damage = 1;
-    p.slowRemainingMs = 1000;
-    const position = { x: own.x, y: own.y };
-    assert.equal(g.splitBalls(owner), 0);
-    assert.equal(g.state.balls.length, 3);
-    assert(own.held);
-    const added = g.state.balls.at(-1);
-    assert.equal(added.x, position.x);
-    assert.equal(added.y, position.y);
-    assert.equal(added.owner, owner);
-    const v = worldToViewVelocity(owner, added);
-    assert(v.vy < 0);
-    near(Math.atan2(v.vx, -v.vy), -W.splitAngle);
-    near(Math.hypot(v.vx, v.vy), 360 * 1.12 * 0.65);
-    const fallback = game();
-    fallback.state.balls = [
-      ball(fallback, { owner: 1 - owner, x: 250, y: 300 }),
-    ];
-    const original = fallback.state.balls[0];
-    fallback.splitBalls(owner);
-    assert.equal(fallback.state.balls.length, 3);
-    assert.equal(original.owner, 1 - owner);
-    for (const b of fallback.state.balls.slice(1)) {
-      assert.equal(b.x, 250);
-      assert.equal(b.y, 300);
-      assert.equal(b.owner, owner);
-    }
-    assert.deepEqual(
-      fallback.state.balls
-        .slice(1)
-        .map((b) => Math.sign(worldToViewVelocity(owner, b).vx)),
-      [-1, 1],
-    );
-    validate(g);
-    validate(fallback);
-  }
-});
-test("simultaneous multiball pickups use drop ID, never exceed three balls, and convert at cap without combo refresh", () => {
-  for (const reverse of [false, true]) {
-    const g = game();
-    g.state.balls = [held(g, 0)];
-    g.followHeldBalls();
-    const a = drop(g, "multi", 1),
-      b = drop(g, "multi", 0);
-    g.state.drops = reverse ? [b, a] : [a, b];
-    g.step();
-    assert.equal(g.state.balls.length, 3);
-    assert.equal(g.state.balls.filter((b) => b.owner === 1).length, 2);
-    assert(g.state.balls[0].held);
-    assert.equal(g.state.players[0].points, 500);
-    assert.equal(g.state.players[0].comboCount, 0);
-    assert.equal(g.state.players[1].points, 0);
-    validate(g);
-  }
+test("legacy multiball pickups award points without spawning balls", () => {
+  const g = game();
+  const before = g.state.balls.length;
+  g.state.drops = [drop(g, "multi", 0), drop(g, "multi", 1)];
+  g.step();
+  assert.equal(g.state.balls.length, before);
+  assert.equal(g.state.players[0].points, 500);
+  assert.equal(g.state.players[1].points, 500);
 });
 test("ammo refills to fifteen, cooldown is exactly fifteen ticks, fire-only preserves held balls", () => {
   const g = game();
@@ -534,6 +480,10 @@ test("any goal, including terminal goal with a last-brick shot, clears all weapo
     g.step();
     assert.equal(g.state.goals[1], terminal ? 5 : 1);
     assert.equal(g.state.players[0].points, 100);
+    assert.equal(g.phase, "playing");
+    assert.equal(g.state.balls.length, 1);
+    Object.assign(g.state.balls[0], { held: false, y: 1011, vy: 360 });
+    g.step();
     assert.equal(g.state.balls.length, 0);
     assert.equal(g.state.shots.length, 0);
     assert.equal(g.state.players[0].ammo, 0);
@@ -573,7 +523,7 @@ test("mixed seeded power/action replay is deterministic and bounded", () => {
     assert.deepEqual(a.getState(), b.getState());
     assert.deepEqual(a.drainEvents(), b.drainEvents());
   }
-  assert(shotsObserved && splitObserved);
+  assert(shotsObserved);
   validate(a);
   validate(b);
 });

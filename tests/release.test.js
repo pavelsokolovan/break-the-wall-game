@@ -7,7 +7,7 @@ import {
   lifecycleLogger,
 } from "../server/operations.js";
 
-const ready = { ok: true, v: 1, features: ["duel-session-v1"] };
+const ready = { ok: true, v: 1, features: ["duel-paired-v1"] };
 const response = (data = ready, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,

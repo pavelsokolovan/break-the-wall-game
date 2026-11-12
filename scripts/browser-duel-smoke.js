@@ -501,21 +501,14 @@ try {
     "Space did not release after last catch charge",
   );
   Object.assign(scenarioGame.state.balls[0], { x: 400, y: 800, vx: 0, vy: 0 });
+  const countBeforeBonus = scenarioGame.state.balls.length;
+  const pointsBeforeBonus = scenarioGame.state.players[0].points;
   addDrop("multi");
   await until(
     a,
-    `(()=>{
-    const canvas=document.getElementById('duel-game'), data=canvas.getContext('2d').getImageData(0,0,800,1000).data;
-    const visited=new Uint8Array(800000); let groups=0;
-    const white=i=>data[i*4]===245&&data[i*4+1]===255&&data[i*4+2]===227;
-    for(let i=0;i<800000;i++) if(!visited[i]&&white(i)) {
-      groups++;const queue=[i];visited[i]=1;
-      for(let k=0;k<queue.length;k++) { const p=queue[k]; for(const q of [p-800,p+800,p%800?p-1:-1,p%800<799?p+1:-1]) if(q>=0&&q<800000&&!visited[q]&&white(q)){visited[q]=1;queue.push(q);} }
-    }
-    return groups===3;
-  })()`,
+    `parseInt(document.getElementById('duel-points').textContent)>=${pointsBeforeBonus + 500}`,
   );
-  assert.equal(scenarioGame.state.balls.length, 3);
+  assert.equal(scenarioGame.state.balls.length, countBeforeBonus);
   for (const ball of scenarioGame.state.balls) {
     ball.vx = 0;
     ball.vy = 0;
@@ -533,7 +526,7 @@ try {
     `parseInt(document.getElementById('duel-points').textContent)>=${interceptPoints + 100}`,
   );
   assert.equal(scenarioGame.state.players[0].points, interceptPoints + 100);
-  // Preserve a snapshot showcase of gear, three balls and mirrored flying shots.
+  // Preserve a snapshot showcase of gear, two balls and mirrored flying shots.
   addDrop("sticky");
   addDrop("bazooka", 1);
   await wait(100);
@@ -643,7 +636,7 @@ try {
   }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",

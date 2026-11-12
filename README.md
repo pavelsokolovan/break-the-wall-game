@@ -110,10 +110,12 @@ Sticky refills three catches. Held balls follow your paddle and automatically re
 after three seconds of active play. Tap the paddle, press Space, or use the action
 button to release all held balls and fire once; F fires without releasing. Bazooka
 adds five shots up to fifteen, with a 250ms firing cooldown. Each shot damages one brick
-or intercepts either player's hazard for +100 points. Multiball adds up to two balls,
-owned by the pickup player, sharing a three-ball cap including held balls; at the cap
-it gives +500 points instead. Goals reset weapons and powers; wave advancement preserves
-them. The action button shows current server-confirmed ammo and held-ball state.
+or intercepts either player's hazard for +100 points. Multiball drops are replaced by gems (+500 points).
+Each round starts with two balls, one at each paddle. Returns capture a ball's ownership
+and colour for future brick points/drops. Each missed ball awards the opponent one goal
+and disappears; the other keeps playing. After both score, powers reset and a new pair
+serves. A completed round with at least five goals and a lead wins; tied goals continue.
+The action button shows current server-confirmed ammo and held-ball state.
 
 Run two terminals after `npm ci`:
 

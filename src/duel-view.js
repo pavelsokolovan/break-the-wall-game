@@ -111,8 +111,9 @@ export function drawDuel(canvas, snapshot, slot, { motion = true } = {}) {
     );
   for (const b of snapshot.state.balls) {
     const p = worldToViewPoint(slot, b);
-    pixelRect(ctx, p.x - 6, p.y - b.r, 12, b.r * 2, "#f5ffe3");
-    pixelRect(ctx, p.x - b.r, p.y - 6, b.r * 2, 12, "#f5ffe3");
+    const color = b.owner === slot ? "#d3fa65" : "#ff6090";
+    pixelRect(ctx, p.x - 6, p.y - b.r, 12, b.r * 2, color);
+    pixelRect(ctx, p.x - b.r, p.y - 6, b.r * 2, 12, color);
   }
   if (["countdown", "goal_countdown"].includes(snapshot.phase)) {
     ctx.font = '48px "VT323", monospace';

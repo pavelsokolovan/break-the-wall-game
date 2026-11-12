@@ -258,7 +258,7 @@ test("side walls reflect without changing speed or awarding goals", () => {
     assert.deepEqual(g.state.goals, [0, 0]);
   }
 });
-test("ball must fully exit; same-end exits count once, opposite exits replay independent of order", () => {
+test("ball must fully exit; each ball scores once, opposite exits both count independent of order", () => {
   for (const scorer of [0, 1]) {
     const g = playing(),
       sign = scorer === 0 ? -1 : 1;
@@ -271,11 +271,11 @@ test("ball must fully exit; same-end exits count once, opposite exits replay ind
       ball(g, { y: scorer === 0 ? -11 : 1011, vy: sign * 360 }),
     );
     g.step();
-    assert.equal(g.state.goals[scorer], 1);
-    assert.equal(g.state.players[1 - scorer].damage, 1);
+    assert.equal(g.state.goals[scorer], 3);
+    assert.equal(g.state.players[1 - scorer].damage, 3);
     assert.equal(g.state.servingSlot, 1 - scorer);
     assert.equal(g.state.balls.length, 0);
-    assert.equal(g.drainEvents().filter((e) => e.type === "goal").length, 1);
+    assert.equal(g.drainEvents().filter((e) => e.type === "goal").length, 3);
   }
   for (const reverse of [false, true]) {
     const g = playing(),
@@ -286,17 +286,16 @@ test("ball must fully exit; same-end exits count once, opposite exits replay ind
     ];
     if (reverse) g.state.balls.reverse();
     g.step();
-    assert.deepEqual(g.state.goals, [0, 0]);
-    assert.equal(g.state.servingSlot, server);
+    assert.deepEqual(g.state.goals, [1, 1]);
     assert.deepEqual(
       g.state.players.map((p) => p.damage),
-      [0, 0],
+      [1, 1],
     );
     assert.equal(g.phase, "goal_countdown");
     assert.equal(g.state.balls.length, 0);
     assert.deepEqual(
       g.drainEvents().map((e) => e.type),
-      ["rally_replay"],
+      ["goal", "goal"],
     );
   }
 });
@@ -527,7 +526,7 @@ test("both aiming edges obey the angle cap and ownership controls speed on retur
       near(Math.hypot(b.vx, b.vy), 360 * 1.12 * 0.65);
     }
 });
-test("opposite exits at different microsteps of one tick still cancel each other", () => {
+test("opposite exits at different microsteps each award one goal", () => {
   for (const reverse of [false, true]) {
     const g = playing();
     g.state.balls = [
@@ -536,10 +535,10 @@ test("opposite exits at different microsteps of one tick still cancel each other
     ];
     if (reverse) g.state.balls.reverse();
     g.step();
-    assert.deepEqual(g.state.goals, [0, 0]);
+    assert.deepEqual(g.state.goals, [1, 1]);
     assert.deepEqual(
       g.drainEvents().map((e) => e.type),
-      ["rally_replay"],
+      ["goal", "goal"],
     );
   }
 });
@@ -570,4 +569,45 @@ test("active-time limit ends by goals, ignores points, excludes pauses and freez
   g.start();
   ticks(g, 180);
   assert.equal(g.state.activeDurationMs, 0);
+});
+
+test("paired rounds start with opposite owners and preserve the second ball after a goal", () => {
+  const g = playing();
+  assert.equal(g.state.balls.length, 2);
+  assert.deepEqual(new Set(g.state.balls.map((b) => b.owner)), new Set([0, 1]));
+  assert(g.state.balls.find((b) => b.owner === 0).vy < 0);
+  assert(g.state.balls.find((b) => b.owner === 1).vy > 0);
+  const [scored, remaining] = g.state.balls;
+  Object.assign(scored, { y: -11, vy: -360 });
+  Object.assign(remaining, { x: 100, y: 200, vx: 0, vy: 0 });
+  g.state.players[1].ammo = 5;
+  g.step();
+  assert.deepEqual(g.state.goals, [1, 0]);
+  assert.equal(g.phase, "playing");
+  assert.equal(g.state.balls.length, 1);
+  assert.equal(g.state.balls[0].id, remaining.id);
+  assert.equal(g.state.players[1].ammo, 5);
+  Object.assign(remaining, { y: 1011, vy: 360 });
+  g.step();
+  assert.deepEqual(g.state.goals, [1, 1]);
+  assert.equal(g.phase, "goal_countdown");
+  ticks(g, 120);
+  assert.equal(g.state.balls.length, 2);
+});
+test("second ball can equalize at five; a later unequal completed round decides the winner", () => {
+  const g = playing();
+  g.state.goals = [4, 4];
+  Object.assign(g.state.balls[0], { y: -11, vy: -360 });
+  Object.assign(g.state.balls[1], { x: 100, y: 200, vx: 0, vy: 0 });
+  g.step();
+  assert.equal(g.getResult(), null);
+  Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
+  g.step();
+  assert.deepEqual(g.state.goals, [5, 5]);
+  assert.equal(g.getResult(), null);
+  ticks(g, 120);
+  for (const b of g.state.balls) Object.assign(b, { y: -11, vy: -360 });
+  g.step();
+  assert.deepEqual(g.getResult().goals, [7, 5]);
+  assert.equal(g.getResult().winner, 0);
 });

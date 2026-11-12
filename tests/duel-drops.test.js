@@ -20,6 +20,7 @@ function game(seed = 5) {
   g.start();
   ticks(g, 180);
   g.drainEvents();
+  g.state.balls = [g.state.balls[0]]; // Isolate drop timing from the other rally ball.
   Object.assign(g.state.balls[0], { x: 100, y: 200, vx: 0, vy: 0 });
   return g;
 }
@@ -94,8 +95,7 @@ test("duel roll ranges enable all outcomes with their exact probabilities", () =
     null: 5600,
     sticky: 300,
     bazooka: 300,
-    multi: 400,
-    gem: 1000,
+    gem: 1400,
     wide: 500,
     slow: 600,
     shield: 300,
@@ -116,7 +116,7 @@ test("duel roll ranges enable all outcomes with their exact probabilities", () =
       "wide",
       "slow",
       "shield",
-      "multi",
+      "gem",
       "repair",
       "vest",
       "bomb",

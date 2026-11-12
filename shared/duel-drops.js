@@ -18,7 +18,7 @@ export function duelDropType(roll, hazardsFull = false) {
   if (!Number.isFinite(roll) || roll < 0 || roll >= 1)
     throw new TypeError("Roll must be in [0,1)");
   const type = dropType(roll, hazardsFull);
-  return type === "life" ? "repair" : type;
+  return type === "life" ? "repair" : type === "multi" ? "gem" : type;
 }
 export function dropHalfExtents(type) {
   return { x: type === "worm" ? 24 : 11, y: type === "rocket" ? 18 : 11 };

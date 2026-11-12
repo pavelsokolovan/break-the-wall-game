@@ -374,3 +374,9 @@ For manual/browser QA, use the environment-supported browser workflow. If unavai
 ## 15. Next-session starting prompt
 
 > Implement Online Duel from docs/ONLINE_DUEL_SPEC.md in pavelsokolovan/break-the-wall-game. Preserve Solo. Start with milestone A, then finish the remaining milestones with tests and free Render deployment configuration. Use the current repository state, inspect local instructions, and verify current hosting limits. Keep UI minimal and maintain pixel graphics, paddle-stroke physics, sticky paddle, bazooka, armor, and hazards. Do not provision paid resources. If Render account access is unavailable, finish the code and checks and provide exact free deployment steps. Report which real-device/browser checks were actually performed.
+
+## Current two-ball rules amendment
+
+The user-approved [paired-round specification](ONLINE_DUEL_PAIRED_ROUNDS_SPEC.md)
+supersedes earlier single-ball, aggregated-goal, immediate-reset and Multiball rules.
+Solo retains its original Multiball behavior.

@@ -477,6 +477,9 @@ test("last-brick/goal and last-brick/victory ties keep points but cannot repair 
     assert.equal(g.state.wave, 1);
     assert.equal(g.pendingWall, null);
     assert.equal(g.state.goals[1], terminal ? 5 : 1);
+    assert.equal(g.phase, "playing");
+    Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
+    g.step();
     assert.equal(g.phase, terminal ? "finished" : "goal_countdown");
     if (terminal) {
       assert.equal(g.getResult().winner, 1);

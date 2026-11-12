@@ -63,7 +63,7 @@ no artificial keep-awake requests. Sources checked 2026-11-12:
 Copy the actual public HTTPS URL from the new service's dashboard. Do not infer the
 hostname from the blueprint's service name. Request `/health` with Origin
 `https://pavelsokolovan.github.io`: require HTTP 200, `Cache-Control: no-store`, exact
-`Access-Control-Allow-Origin`, and JSON `ok:true`, `v:1`, with `duel-session-v1` in
+`Access-Control-Allow-Origin`, and JSON `ok:true`, `v:1`, with `duel-paired-v1` in
 `features`. An unknown Origin must return 403. Health reveals no room or token data.
 
 Use two WebSocket clients on the actual public `wss://<assigned-host>/ws` endpoint,

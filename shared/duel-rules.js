@@ -28,7 +28,7 @@ export const DUEL_RULES = Object.freeze({
   brickColumns: 8,
 });
 export const PROTOCOL_VERSION = 1;
-export const SESSION_FEATURE = "duel-session-v1";
+export const SESSION_FEATURE = "duel-paired-v1";
 export const WEBSOCKET_PATH = "/ws";
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const ROOM_CODE_LENGTH = 6;
