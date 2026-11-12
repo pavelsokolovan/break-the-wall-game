@@ -47,6 +47,8 @@ observed service health and two-client acceptance. No paid services, database or
 - SIGTERM/SIGINT stops timers/new sockets, sends terminal interruption, drains connections
   with a bounded forced close, and exits. Repeated close calls await the same shutdown.
   Rooms stay in memory; deploys/restarts lose rooms, and clients cannot invent results.
+  Use Render's default platform shutdown allowance; do not set maxShutdownDelaySeconds,
+  which Render's provisioning validator rejects for Free services.
 
 ## Client wake-up flow
 
@@ -117,3 +119,7 @@ Stage 9's hosted checkpoint remains pending: provision Free service, verify heal
 public WSS, configure the actual Pages backend variable, publish and validate two clients.
 Stage 10 physical devices and real networks remain after that checkpoint. No paid
 resources, database, disk or artificial keep-awake traffic were added.
+
+Provisioning correction: Render's Free-plan validator rejected maxShutdownDelaySeconds.
+Removed that optional setting; the server retains its one-second application drain.
+Generic JSON Schema validation did not detect this plan-specific restriction.

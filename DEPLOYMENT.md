@@ -43,8 +43,9 @@ The configuration declares:
 - `MAX_ROOMS=20`, `MAX_SOCKETS=100`, `LOG_LEVEL=info`.
 - `autoDeployTrigger: checksPass`: subsequent deploys wait for linked-branch CI checks.
   Verify this setting and the GitHub connection in Render after initial provisioning.
-- Ten-second platform shutdown allowance; application force-closes transports after
-  one second and sends terminal interruption before stopping. Rooms are in memory.
+- Use Render's default shutdown allowance: Free services do not support configuring
+  `maxShutdownDelaySeconds`. The application force-closes transports after one second
+  and sends terminal interruption before stopping. Rooms are in memory.
 
 Keep the compute plan Free. Free services sleep after 15 idle minutes and can take
 about a minute to wake. Workspaces share 750 free instance hours each month; bandwidth
