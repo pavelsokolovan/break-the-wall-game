@@ -61,7 +61,7 @@ export function mountMultiplayer({
     $("online-mode").textContent = `ONLINE DUEL · JOIN ${invited}`;
   }
   const clock = new ServerClock(),
-    sync = new DuelSync({ clock });
+    sync = new DuelSync({ clock, interpolationMs: 50, correctionMs: 40 });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
   function status(text) {
     $("duel-status").textContent = text;
@@ -172,6 +172,7 @@ export function mountMultiplayer({
         receivedAt = now();
         sync.push(message, receivedAt, client.slot);
         canvas.hidden = false;
+        $("duel-drag-area").hidden = false;
         $("duel-hud").hidden = false;
         $("duel-action").hidden = false;
         const local = message.state.players[client.slot];
@@ -274,6 +275,7 @@ export function mountMultiplayer({
     $("duel-slots").textContent = "";
     $("duel-slots").hidden = false;
     canvas.hidden = true;
+    $("duel-drag-area").hidden = true;
     $("duel-hud").hidden = true;
     $("duel-action").hidden = true;
     controls();
@@ -430,6 +432,44 @@ export function mountMultiplayer({
       y: ((e.clientY - r.top) / r.height) * R.height,
     };
   }
+  function aim(e) {
+    target = Math.max(0, Math.min(1, position(e).x / R.width));
+    sync.setTarget(target, now());
+    if (now() - receivedAt <= 250) client.input(target);
+  }
+  let dragId = null;
+  const dragArea = $("duel-drag-area");
+  dragArea.addEventListener("pointerdown", (e) => {
+    if (
+      e.isPrimary === false ||
+      leaving ||
+      panel ||
+      doc.hidden ||
+      client.recovering ||
+      snapshot?.phase !== "playing" ||
+      client.socket?.readyState !== 1
+    )
+      return;
+    dragId = e.pointerId;
+    dragArea.setPointerCapture(e.pointerId);
+    aim(e);
+  });
+  dragArea.addEventListener("pointermove", (e) => {
+    if (
+      dragId === e.pointerId &&
+      snapshot?.phase === "playing" &&
+      !client.recovering &&
+      !panel
+    )
+      aim(e);
+  });
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+    dragArea.addEventListener(type, (e) => {
+      if (dragId !== e.pointerId) return;
+      dragId = null;
+      if (dragArea.hasPointerCapture(e.pointerId))
+        dragArea.releasePointerCapture(e.pointerId);
+    });
   canvas.addEventListener("pointerdown", (e) => {
     if (
       leaving ||
@@ -521,6 +561,7 @@ export function mountMultiplayer({
     target = null;
     action = "none";
     tap = null;
+    dragId = null;
   }
   win.addEventListener("blur", inactive);
   doc.addEventListener("visibilitychange", () => {
@@ -581,7 +622,9 @@ export function mountMultiplayer({
         showSnapshotStatus(snapshot);
       const available = Math.max(
         80,
-        win.innerHeight - canvas.getBoundingClientRect().top - 68,
+        (win.visualViewport?.height ?? win.innerHeight) -
+          canvas.getBoundingClientRect().top -
+          60,
       );
       const width = Math.min(
         $("duel-panel").clientWidth || 800,

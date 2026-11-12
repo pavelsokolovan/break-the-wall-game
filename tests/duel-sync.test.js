@@ -426,3 +426,16 @@ test("recovery retries socket constructor failures and heartbeat silence starts 
   assert(silent.client.recovering);
   assert.equal(silent.client.state, "reconnecting");
 });
+
+test("bounce reversals use confirmed position instead of blending through a paddle", () => {
+  const sync = new DuelSync({ interpolationMs: 50, correctionMs: 40 });
+  const before = snapshot(1000),
+    after = snapshot(1050);
+  Object.assign(before.state.balls[0], { x: 400, y: 895, vx: 0, vy: 360 });
+  Object.assign(after.state.balls[0], { x: 400, y: 890, vx: 0, vy: -360 });
+  sync.push(before, 1000, 0);
+  sync.push(after, 1050, 0);
+  const displayed = sync.frame(1075).snapshot.state.balls[0];
+  assert.equal(displayed.y, 890);
+  assert.equal(displayed.vy, -360);
+});

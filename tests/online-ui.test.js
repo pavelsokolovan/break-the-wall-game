@@ -999,3 +999,43 @@ test("wake errors expose retry, cancel aborts the pending attempt and successful
   assert(f.$("duel-cancel").hidden);
   assert(f.$("duel-retry").hidden);
 });
+
+test("Duel drag strip moves immediately without firing and action control is above the field", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  const s = snapshot();
+  s.state.players[0].ammo = 5;
+  socket.receive(s);
+  const area = f.$("duel-drag-area");
+  assert(!area.hidden);
+  area.setPointerCapture = () => {};
+  area.hasPointerCapture = () => false;
+  area.dispatchEvent(
+    new f.window.PointerEvent("pointerdown", {
+      pointerId: 5,
+      isPrimary: true,
+      clientX: 650,
+      clientY: 1050,
+      pointerType: "touch",
+    }),
+  );
+  assert.equal(socket.sent.at(-1).type, "input");
+  assert.equal(socket.sent.at(-1).x, 650 / 800);
+  assert.equal(socket.sent.at(-1).action, "none");
+  assert(
+    f.$("duel-action").compareDocumentPosition(f.$("duel-game")) &
+      f.window.Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+  area.dispatchEvent(
+    new f.window.PointerEvent("pointercancel", { pointerId: 5 }),
+  );
+  const count = socket.sent.length;
+  area.dispatchEvent(
+    new f.window.PointerEvent("pointermove", {
+      pointerId: 5,
+      clientX: 100,
+      clientY: 1050,
+    }),
+  );
+  assert.equal(socket.sent.length, count);
+});

@@ -52,7 +52,13 @@ export class ServerClock {
 }
 
 export class DuelSync {
-  constructor({ clock = new ServerClock() } = {}) {
+  constructor({
+    clock = new ServerClock(),
+    interpolationMs = 100,
+    correctionMs = 80,
+  } = {}) {
+    this.interpolationMs = interpolationMs;
+    this.correctionMs = correctionMs;
     this.clock = clock;
     this.reset();
   }
@@ -147,7 +153,10 @@ export class DuelSync {
     if (!connected && this.lastRendered)
       return { snapshot: structuredClone(this.lastRendered), stale: true };
     const snapshot = structuredClone(latest.snapshot);
-    this.cursor = Math.max(this.cursor, this.clock.serverNow(now) - 100);
+    this.cursor = Math.max(
+      this.cursor,
+      this.clock.serverNow(now) - this.interpolationMs,
+    );
     let left = this.snapshots[0].snapshot,
       right = left;
     for (const item of this.snapshots) {
@@ -174,7 +183,10 @@ export class DuelSync {
           !start ||
           !end ||
           start.held !== end.held ||
-          start.owner !== end.owner
+          start.owner !== end.owner ||
+          (Number.isFinite(start.vy) &&
+            (Math.sign(start.vy) !== Math.sign(end.vy) ||
+              Math.sign(start.vx) !== Math.sign(end.vx)))
         )
           continue;
         item.x = blend(start.x, end.x);
@@ -197,7 +209,7 @@ export class DuelSync {
         dt,
         this.local.width,
       );
-      this.local.offset *= Math.exp(-dt / 80);
+      this.local.offset *= Math.exp(-dt / this.correctionMs);
       const displayed = move(
         previousDisplay,
         this.local.x + this.local.offset,

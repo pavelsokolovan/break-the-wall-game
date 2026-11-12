@@ -1215,3 +1215,59 @@ main:has(#duel-panel:not([hidden])) {
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* Online play prioritizes field area and keeps fingers below the local paddle. */
+body:has(#duel-panel:not([hidden])) header {
+  height: 40px;
+  padding-block: 4px;
+}
+body:has(#duel-panel:not([hidden])) .game-name {
+  font-size: 11px;
+}
+body:has(#duel-panel:not([hidden])) .mode-selector {
+  margin: 4px 0;
+  gap: 6px;
+}
+body:has(#duel-panel:not([hidden])) button {
+  padding: 6px 8px;
+  font-size: 10px;
+  min-height: 32px;
+}
+body:has(#duel-panel:not([hidden])) main {
+  padding-top: 4px;
+}
+.duel-panel h2 {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.duel-panel #duel-status {
+  font-size: 16px;
+  margin: 3px 0;
+}
+.duel-panel .duel-room-actions {
+  gap: 4px;
+  margin: 2px 0;
+}
+.duel-panel .duel-room-actions:has(> button):not(:has(> button:not([hidden]))) {
+  display: none;
+}
+.duel-panel .duel-hud {
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 16px;
+  flex-wrap: wrap;
+}
+#duel-drag-area {
+  height: 52px;
+  margin: 0 auto;
+  touch-action: none;
+  user-select: none;
+  color: var(--muted);
+  font:
+    16px "VT323",
+    monospace;
+  align-content: center;
+}
+#duel-drag-area[hidden] {
+  display: none;
+}

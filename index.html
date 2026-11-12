@@ -128,6 +128,9 @@
             <button id="duel-leave" type="button" hidden>LEAVE ROOM</button>
             <button id="duel-share" type="button" hidden>INVITE</button>
             <button id="duel-pause" type="button" hidden>PAUSE</button>
+            <button id="duel-action" type="button" hidden>
+              RELEASE / FIRE
+            </button>
             <button id="duel-rematch" type="button" hidden>REMATCH</button>
             <button id="duel-legend" type="button" aria-haspopup="dialog">
               LEGEND
@@ -148,7 +151,13 @@
             aria-label="Online Duel. Your paddle is at the bottom. Move with mouse, drag, arrows, A or D. First to five goals wins."
             hidden
           ></canvas>
-          <button id="duel-action" type="button" hidden>RELEASE / FIRE</button>
+          <div
+            id="duel-drag-area"
+            aria-label="Drag here to move your paddle"
+            hidden
+          >
+            ↔ DRAG TO MOVE
+          </div>
         </section>
       </main>
     </div>
