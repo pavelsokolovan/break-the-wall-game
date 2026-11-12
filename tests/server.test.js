@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { createConnection } from "node:net";
+import { spawn } from "node:child_process";
 import { setImmediate as turn } from "node:timers/promises";
 import WebSocket from "ws";
 import { createDuelServer } from "../server/index.js";
@@ -255,7 +257,11 @@ test(
     });
     assert.equal(health.status, 200);
     assert.equal(health.headers.get("access-control-allow-origin"), origin);
-    assert.deepEqual(await health.json(), { ok: true, v: 1 });
+    assert.deepEqual(await health.json(), {
+      ok: true,
+      v: 1,
+      features: ["duel-session-v1"],
+    });
     assert.equal(
       (
         await fetch(`${base}/health`, {
@@ -1109,5 +1115,115 @@ test(
     b.socket.close();
     await a.next("room", (r) => !r.players[0].connected);
     assert(room.seats.every((s) => !s?.rematchReady));
+  },
+);
+
+test(
+  "forwarded IPs cannot bypass rate limits unless the transport peer is explicitly trusted",
+  { timeout: 10000 },
+  async (t) => {
+    for (const [trustedProxyCidrs, expected] of [
+      ["", "127.0.0.1"],
+      ["127.0.0.1/32", "198.51.100.7"],
+    ]) {
+      const f = await fixture(t, { trustedProxyCidrs });
+      const socket = new WebSocket(`ws://127.0.0.1:${f.app.port}/ws`, {
+        origin,
+        headers: { "X-Forwarded-For": "192.0.2.99, 198.51.100.7" },
+      });
+      const peer = new Peer(socket);
+      await once(socket, "open");
+      assert.equal(
+        f.app.manager.connections.values().next().value.ip,
+        expected,
+      );
+      peer.send({ type: "create", requestId: "create" });
+      await peer.next("welcome");
+    }
+  },
+);
+test("production config rejects invalid limits, ports, proxy ranges and log levels before listening", async () => {
+  for (const options of [
+    { port: -1 },
+    { port: 70000 },
+    { maxRooms: 0 },
+    { maxSockets: 1.5 },
+    { trustedProxyCidrs: "*" },
+    { logLevel: "trace" },
+    { origins: ["https://example/path"] },
+  ])
+    await assert.rejects(createDuelServer({ port: 0, ...options }));
+});
+test(
+  "repeated shutdown awaits one bounded drain and lifecycle logs exclude seat tokens",
+  { timeout: 10000 },
+  async (t) => {
+    const lines = [],
+      f = await fixture(t, {
+        logLevel: "info",
+        logWriter: (line) => lines.push(line),
+      });
+    const { a, b, welcome } = await f.room();
+    const slow = createConnection({ host: "127.0.0.1", port: f.app.port });
+    await once(slow, "connect");
+    slow.write("GET /health HTTP/1.1\r\nHost: localhost\r\n");
+    t.after(() => slow.destroy());
+    const closing = f.app.close();
+    assert.equal(f.app.close(), closing);
+    const error = await a.next("error");
+    assert(error.terminal);
+    assert.match(error.message, /shutting down/);
+    await closing;
+    await b.closed;
+    assert(lines.some((line) => JSON.parse(line).event === "server_stopped"));
+    assert(!lines.join("\n").includes(welcome.token));
+    assert(!lines.join("\n").includes("X-Forwarded-For"));
+    assert.equal(f.app.manager.rooms.size, 0);
+  },
+);
+
+test(
+  "CLI SIGTERM delivers interruption and exits cleanly within the shutdown window",
+  { timeout: 10000 },
+  async (t) => {
+    const child = spawn(process.execPath, ["server/index.js"], {
+      env: {
+        ...process.env,
+        PORT: "0",
+        LOG_LEVEL: "info",
+        ALLOWED_ORIGINS: origin,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    t.after(() => child.kill("SIGKILL"));
+    const exited = once(child, "exit");
+    let port,
+      output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+      for (const line of output.split("\n")) {
+        try {
+          const data = JSON.parse(line);
+          if (data.event === "server_ready") port = data.port;
+        } catch {}
+      }
+    });
+    const deadline = performance.now() + 3000;
+    while (!port && performance.now() < deadline)
+      await new Promise((r) => setTimeout(r, 5));
+    assert(port, "CLI did not become ready");
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin }),
+      peer = new Peer(socket);
+    t.after(() => socket.terminate());
+    await once(socket, "open");
+    peer.send({ type: "create", requestId: "cli" });
+    const welcome = await peer.next("welcome");
+    child.kill("SIGTERM");
+    const notice = await peer.next("error");
+    assert(notice.terminal);
+    const [code, signal] = await exited;
+    assert.equal(code, 0);
+    assert.equal(signal, null);
+    assert(!output.includes(welcome.token));
   },
 );

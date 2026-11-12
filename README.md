@@ -8,7 +8,8 @@ The game has two separate modes: **Solo**, the existing single-player campaign, 
 **Online Duel**, the additional two-player online mode. Solo stays available without
 a multiplayer backend and keeps its existing saves. Online Duel is currently a local
 preview with connection recovery and complete session controls; hosted deployment
-and real-device release validation are later stages.
+is configured in Stage 9 but still needs account setup; real-device release validation
+is Stage 10.
 
 ## Play
 
@@ -89,7 +90,7 @@ Bazooka pickups add five stored shots, capped at fifteen. The cannon is visible 
 
 ## Online Duel local preview
 
-[Stage 8](docs/ONLINE_DUEL_STAGE_08_SPEC.md) builds on private rooms and readiness
+[Stage 9](docs/ONLINE_DUEL_STAGE_09_SPEC.md) builds on private rooms and readiness
 with symmetric central walls, opposite paddles, automatic serves, damage, and first-to-five
 results. Break bricks for personal points and independent combos; goals decide the winner.
 Walls include armor, explosive chains, reinforced plates, and isolated steel as waves
@@ -161,9 +162,18 @@ brick points never break ties. After a result, both connected players can choose
 storage falls back to memory. Connected voluntary leave briefly waits for the server's
 forfeit result before clearing identity; missed results are never invented.
 
-Free-host deployment remains Stage 9. The server enforces Origin checks, message and resource
+Stage 9 adds a single-service Render Free blueprint and CI-gated release configuration.
+Before create/join the client checks server health for up to 90 seconds, handles loading
+pages and offers Cancel/Retry while Solo stays available. Merely loading the page or
+selecting Online Duel does not wake the server. Release builds use public repository
+variable `VITE_MULTIPLAYER_URL` and reject malformed nonempty values. Actual Render
+provisioning and Pages multiplayer release still need account setup; see
+[DEPLOYMENT.md](DEPLOYMENT.md) for the backend-first steps and pending acceptance record.
+
+The server enforces Origin checks, message and resource
 limits, input sequencing, bounded send buffers, and idle cleanup. Forwarded IP headers
-are ignored until trusted proxy configuration is implemented.
+are ignored unless explicitly verified proxy CIDRs are configured. The default trust
+list stays empty; lifecycle logs exclude tokens and input streams.
 
 `npm test` includes real loopback WebSocket clients and UI tests. `npm run test:browser`
 runs the optional two-page Chromium smoke test with portrait/landscape screenshots;

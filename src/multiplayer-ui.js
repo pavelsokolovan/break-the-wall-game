@@ -1,3 +1,4 @@
+import { ServerWake } from "./server-wake.js";
 import {
   DuelHistory,
   invitationCode,
@@ -21,6 +22,7 @@ export function mountMultiplayer({
   onUserGesture = () => {},
   onSound = () => {},
   clientFactory = (options) => new OnlineClient(options),
+  wakeFactory = (options) => new ServerWake(options),
   now = () => performance.now(),
 } = {}) {
   const $ = (id) => doc.getElementById(id),
@@ -43,7 +45,8 @@ export function mountMultiplayer({
     panel = null,
     panelFocus = null,
     resolveLeave = null,
-    leaving = false;
+    leaving = false,
+    lastRequest = null;
   const keys = new Set();
   let localStorage;
   try {
@@ -71,6 +74,8 @@ export function mountMultiplayer({
     $("duel-ready").disabled = !room?.players.every((p) => p.connected);
     $("duel-leave").hidden = !room;
     $("duel-connect").hidden = !!room;
+    $("duel-cancel").hidden = !pending || !!room;
+    $("duel-retry").hidden = pending || !!room || !lastRequest;
     const connected = client.socket?.readyState === 1 && !client.recovering;
     $("duel-share").hidden = !room;
     $("duel-pause").hidden = !snapshot || !!result;
@@ -236,7 +241,23 @@ export function mountMultiplayer({
       if (message.type === "error" && !result) status(message.message);
     },
   });
+  const wake = wakeFactory({
+    fetcher: (...args) => win.fetch(...args),
+    now,
+    onStatus: (text) => {
+      if (active && pending) status(text);
+    },
+  });
+  function cancelRequest() {
+    if (!pending || room) return;
+    generation++;
+    wake.cancel();
+    client.disconnect("Connection cancelled. Retry or play Solo.");
+    pending = false;
+    controls();
+  }
   function reset() {
+    lastRequest = null;
     sync.reset();
     closePanel(false);
     $("duel-invite-fallback").hidden = true;
@@ -260,6 +281,7 @@ export function mountMultiplayer({
   async function leave() {
     if (leaving) return;
     generation++;
+    wake.cancel();
     leaving = true;
     controls();
     inactive();
@@ -284,7 +306,7 @@ export function mountMultiplayer({
       });
     } else client.send({ type: "leave" });
     client.disconnect();
-    leaving = false;
+    ((leaving = false), (lastRequest = null));
     pending = false;
     reset();
   }
@@ -340,10 +362,13 @@ export function mountMultiplayer({
       return;
     }
     const current = ++generation;
+    lastRequest = type;
     pending = true;
     controls();
     onUserGesture();
     try {
+      await wake.wake(url);
+      if (current !== generation || !active) return;
       await client.connect(url);
       if (current !== generation) return;
       await client.request(type, code ? { code } : {});
@@ -360,6 +385,8 @@ export function mountMultiplayer({
   $("solo-mode").onclick = () => {
     if (active) switchMode(false);
   };
+  $("duel-cancel").onclick = cancelRequest;
+  $("duel-retry").onclick = () => request(lastRequest);
   $("duel-create").onclick = () => request("create");
   $("duel-connect").onsubmit = (e) => {
     e.preventDefault();

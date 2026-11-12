@@ -10,8 +10,13 @@ import { Bucket, LIMITS, error, send } from "./protocol.js";
 
 const LIVE = ["countdown", "playing", "goal_countdown"];
 export class RoomManager {
-  constructor({ now = () => performance.now(), maxRooms = LIMITS.rooms } = {}) {
+  constructor({
+    now = () => performance.now(),
+    maxRooms = LIMITS.rooms,
+    log = () => {},
+  } = {}) {
     this.now = now;
+    this.log = log;
     this.maxRooms = maxRooms;
     this.rooms = new Map();
     this.connections = new Map();
@@ -113,6 +118,7 @@ export class RoomManager {
     if (!room.game) seat.ready = false;
     connection.room = room;
     connection.slot = slot;
+    this.log("seat_resumed", { code: room.code, matchId: room.game?.matchId });
     respond(this.welcome(connection, message.requestId, true));
     if (room.game?.phase === "finished") {
       send(connection.socket, this.roomMessage(room));
@@ -218,6 +224,11 @@ export class RoomManager {
     if (game.phase === "finished" && !room.resultSent) {
       room.resultSent = true;
       room.finishedAt = this.now();
+      this.log("match_finished", {
+        code: room.code,
+        matchId: game.matchId,
+        reason: game.getResult().reason,
+      });
       this.broadcast(room, game.getResult());
       this.broadcast(room, this.roomMessage(room));
     }
@@ -298,6 +309,7 @@ export class RoomManager {
         pauseUsed: [false, false],
       };
       this.rooms.set(code, room);
+      this.log("room_created", { code });
     } else {
       room = this.rooms.get(message.code);
       if (!room)
@@ -315,6 +327,7 @@ export class RoomManager {
     room.seats[slot] = seat;
     connection.room = room;
     connection.slot = slot;
+    this.log("seat_joined", { code: room.code });
     respond(this.welcome(connection, message.requestId, false));
     this.broadcast(room, this.roomMessage(room));
   }
@@ -394,6 +407,7 @@ export class RoomManager {
     room.pauseUsed = [false, false];
     room.stalls = [];
     room.game.start();
+    this.log("match_started", { code: room.code, matchId: room.game.matchId });
     room.seats.forEach((seat, slot) => {
       seat.token = randomBytes(16).toString("hex");
       seat.rematchReady = false;
@@ -436,6 +450,10 @@ export class RoomManager {
           matchId: randomUUID(),
         });
         room.game.start();
+        this.log("match_started", {
+          code: room.code,
+          matchId: room.game.matchId,
+        });
       }
       this.broadcast(room, this.roomMessage(room));
       this.snapshot(room);
@@ -500,6 +518,7 @@ export class RoomManager {
   }
   interrupt(room, message, code = "SERVER_BUSY") {
     this.rooms.delete(room.code);
+    this.log("room_closed", { code: room.code, reason: code });
     for (const seat of room.seats) {
       if (!seat?.socket) continue;
       const c = this.connections.get(seat.socket);

@@ -68,7 +68,11 @@ function snapshot(phase = "playing") {
 }
 function fixture(
   t,
-  { url = "ws://localhost:3001/ws", href = "http://localhost:5173/" } = {},
+  {
+    url = "ws://localhost:3001/ws",
+    href = "http://localhost:5173/",
+    wakeFactory = () => ({ wake: () => undefined, cancel: () => {} }),
+  } = {},
 ) {
   const window = new Window({ url: href }),
     doc = window.document;
@@ -109,6 +113,7 @@ function fixture(
     now: () => clock,
     onModeChange: (mode) => modes.push(mode),
     onSound: (sound) => sounds.push(sound),
+    wakeFactory,
     clientFactory: (options) =>
       new OnlineClient({
         ...options,
@@ -134,6 +139,7 @@ function fixture(
   async function join(slot = 0) {
     ui.switchMode(true);
     $("duel-create").click();
+    await turn();
     const socket = sockets.at(-1);
     socket.open();
     await turn();
@@ -216,7 +222,9 @@ test("create/join disable duplicate submissions, normalize codes and recover fro
   assert(f.$("duel-create").disabled);
   assert(f.$("duel-join").disabled);
   f.$("duel-create").click();
+  await turn();
   assert.equal(f.sockets.length, 1);
+  await turn();
   const socket = f.sockets[0];
   socket.open();
   await turn();
@@ -898,6 +906,7 @@ test("invitation stays in Solo until explicit entry/join; sharing has a selectab
   assert.equal(f.sockets.length, 0);
   assert.match(f.$("duel-status").textContent, /Invitation/);
   f.$("duel-connect").requestSubmit();
+  await turn();
   const socket = f.sockets[0];
   socket.open();
   await turn();
@@ -919,4 +928,74 @@ test("invitation stays in Solo until explicit entry/join; sharing has a selectab
   const link = f.$("duel-invite-link").value;
   assert.equal(new URL(link).searchParams.get("duel"), "ABC234");
   assert(!link.includes("opaque"));
+});
+
+test("cold wake blocks duplicate create, cancellation restores Solo and ignores a late health response", async (t) => {
+  const calls = [];
+  let resolve,
+    cancelCount = 0;
+  const f = fixture(t, {
+    wakeFactory: (options) => ({
+      wake: () => {
+        calls.push("health");
+        options.onStatus("Waking server… 90s remaining");
+        return new Promise((r) => (resolve = r));
+      },
+      cancel: () => cancelCount++,
+    }),
+  });
+  assert.equal(calls.length, 0);
+  f.ui.switchMode(true);
+  assert.equal(calls.length, 0);
+  f.$("duel-create").click();
+  f.$("duel-create").click();
+  assert.equal(calls.length, 1);
+  assert.equal(f.sockets.length, 0);
+  assert.match(f.$("duel-status").textContent, /Waking server/);
+  assert(!f.$("duel-cancel").hidden);
+  f.$("solo-mode").click();
+  assert(!f.$("solo-panel").hidden);
+  assert(cancelCount > 0);
+  resolve();
+  await turn();
+  assert.equal(f.sockets.length, 0);
+});
+test("wake errors expose retry, cancel aborts the pending attempt and successful retry sends create once", async (t) => {
+  let attempt = 0,
+    finish;
+  const f = fixture(t, {
+    wakeFactory: () => ({
+      wake: () => {
+        attempt++;
+        if (attempt === 1)
+          return Promise.reject(Error("Server did not wake. Retry."));
+        return new Promise((r) => (finish = r));
+      },
+      cancel: () => {},
+    }),
+  });
+  f.ui.switchMode(true);
+  f.$("duel-create").click();
+  await turn();
+  assert(!f.$("duel-retry").hidden);
+  assert(!f.$("duel-create").disabled);
+  assert.equal(f.sockets.length, 0);
+  f.$("duel-retry").click();
+  f.$("duel-cancel").click();
+  finish();
+  await turn();
+  assert.equal(f.sockets.length, 0);
+  f.$("duel-retry").click();
+  finish();
+  await turn();
+  assert.equal(f.sockets.length, 1);
+  const socket = f.sockets[0];
+  socket.open();
+  await turn();
+  assert.equal(socket.sent.filter((m) => m.type === "create").length, 1);
+  socket.receive(welcome(0));
+  socket.receive(room());
+  await turn();
+  assert(f.$("duel-cancel").hidden);
+  assert(f.$("duel-retry").hidden);
 });

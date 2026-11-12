@@ -1,6 +1,7 @@
 # Online Duel implementation specification
 
-Status: Stages 1–8 implemented locally; Stages 9–10 pending. Not deployed.
+Status: Stages 1–8 implemented locally; Stage 9 repository implementation complete,
+hosted provisioning/acceptance pending; Stage 10 pending. Not deployed.
 Original handoff prepared 2026-11-11. See [the staged roadmap](ONLINE_DUEL_ROADMAP.md) for progress.
 
 Repository: https://github.com/pavelsokolovan/break-the-wall-game

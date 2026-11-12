@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { clientAddressResolver, lifecycleLogger } from "./operations.js";
+import { PROTOCOL_VERSION, SESSION_FEATURE } from "../shared/duel-rules.js";
 import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { RoomManager } from "./rooms.js";
@@ -25,13 +27,23 @@ export async function createDuelServer({
   autoSchedule = true,
   maxRooms = positiveLimit(process.env.MAX_ROOMS, LIMITS.rooms),
   maxSockets = positiveLimit(process.env.MAX_SOCKETS, LIMITS.sockets),
+  trustedProxyCidrs = process.env.TRUSTED_PROXY_CIDRS || "",
+  logLevel = process.env.LOG_LEVEL || "silent",
+  logWriter,
 } = {}) {
+  if (!Number.isInteger(port) || port < 0 || port > 65535)
+    throw new TypeError("Invalid server port");
+  positiveLimit(maxRooms, LIMITS.rooms);
+  positiveLimit(maxSockets, LIMITS.sockets);
+  const log = lifecycleLogger(logLevel, logWriter);
+  const clientAddress = clientAddressResolver(trustedProxyCidrs);
   const allow = new Set(origins);
   for (const origin of allow)
     if (!/^https?:\/\//.test(origin) || new URL(origin).origin !== origin)
       throw new TypeError("Origins must be exact HTTP origins");
-  const manager = new RoomManager({ now, maxRooms });
-  let closing = false;
+  const manager = new RoomManager({ now, maxRooms, log });
+  let closing = false,
+    closePromise;
   const server = createServer((request, response) => {
     const origin = request.headers.origin;
     if (origin && !allow.has(origin)) {
@@ -41,15 +53,29 @@ export async function createDuelServer({
     response.setHeader("Vary", "Origin");
     if (origin) response.setHeader("Access-Control-Allow-Origin", origin);
     if (request.url === "/health" && request.method === "GET") {
-      response.writeHead(200, {
+      response.writeHead(closing ? 503 : 200, {
         "Content-Type": "application/json",
         "Cache-Control": "no-store",
       });
-      response.end(JSON.stringify({ ok: true, v: 1 }));
+      response.end(
+        JSON.stringify({
+          ok: !closing,
+          v: PROTOCOL_VERSION,
+          features: [SESSION_FEATURE],
+        }),
+      );
       return;
     }
     response.writeHead(404).end();
   });
+  const transports = new Set();
+  server.on("connection", (socket) => {
+    transports.add(socket);
+    socket.on("close", () => transports.delete(socket));
+  });
+  server.requestTimeout = 15000;
+  server.headersTimeout = 10000;
+  server.keepAliveTimeout = 5000;
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: LIMITS.payloadBytes,
@@ -74,7 +100,8 @@ export async function createDuelServer({
     });
   });
   wss.on("connection", (socket, request) => {
-    manager.attach(socket, request.socket.remoteAddress);
+    manager.attach(socket, clientAddress(request));
+    log("connection_open", { connections: wss.clients.size });
     socket.on("error", () => {});
     socket.on("pong", () => {
       const c = manager.connections.get(socket);
@@ -97,7 +124,10 @@ export async function createDuelServer({
       }
       manager.handle(socket, parsed.value);
     });
-    socket.on("close", () => manager.detach(socket));
+    socket.on("close", () => {
+      manager.detach(socket);
+      log("connection_closed", { connections: wss.clients.size });
+    });
   });
   const scheduler = autoSchedule
     ? setInterval(() => manager.advance(), 1000 / 120)
@@ -120,25 +150,33 @@ export async function createDuelServer({
     wss.close();
     throw e;
   }
+  log("server_ready", { port: server.address().port });
   return {
     server,
     wss,
     manager,
     port: server.address().port,
-    async close() {
-      if (closing) return;
-      closing = true;
-      clearInterval(scheduler);
-      clearInterval(heartbeat);
-      manager.close();
-      const force = setTimeout(() => {
-        for (const socket of wss.clients) socket.terminate();
-      }, 200);
-      await Promise.all([
-        new Promise((resolve) => wss.close(resolve)),
-        new Promise((resolve) => server.close(resolve)),
-      ]);
-      clearTimeout(force);
+    close() {
+      if (closePromise) return closePromise;
+      closePromise = (async () => {
+        closing = true;
+        clearInterval(scheduler);
+        clearInterval(heartbeat);
+        log("server_stopping");
+        manager.close();
+        const force = setTimeout(() => {
+          for (const socket of wss.clients) socket.terminate();
+          server.closeAllConnections();
+          for (const socket of transports) socket.destroy();
+        }, 1000);
+        await Promise.all([
+          new Promise((resolve) => wss.close(resolve)),
+          new Promise((resolve) => server.close(resolve)),
+        ]);
+        clearTimeout(force);
+        log("server_stopped");
+      })();
+      return closePromise;
     },
   };
 }
@@ -146,8 +184,9 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  const app = await createDuelServer();
-  console.log(`Duel server listening on port ${app.port}`);
+  const app = await createDuelServer({
+    logLevel: process.env.LOG_LEVEL || "info",
+  });
   const stop = async () => {
     await app.close();
     process.exitCode = 0;

@@ -1,5 +1,6 @@
 /** Optional real-browser smoke test. Requires Chromium; not part of npm test. */
 import assert from "node:assert/strict";
+import { createServer as createHttpServer } from "node:http";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,14 +11,35 @@ import { createServer } from "vite";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const profile = await mkdtemp(join(tmpdir(), "brickfall-chrome-"));
-let chrome, vite, app, cdp;
+let chrome, vite, app, cdp, gateway;
+let healthReady = false,
+  healthRequests = 0;
 try {
   app = await createDuelServer({
     host: "127.0.0.1",
     port: 0,
     origins: ["http://127.0.0.1:5173"],
   });
-  process.env.VITE_MULTIPLAYER_URL = `ws://127.0.0.1:${app.port}/ws`;
+  // Simulate Render's loading response without exposing a production fixture route.
+  gateway = createHttpServer((request, response) => {
+    if (request.url === "/health") {
+      healthRequests++;
+      if (!healthReady) {
+        response.writeHead(503, {
+          "Access-Control-Allow-Origin": "http://127.0.0.1:5173",
+          "Content-Type": "text/html",
+        });
+        response.end("<html>Waking server</html>");
+        return;
+      }
+    }
+    app.server.emit("request", request, response);
+  });
+  gateway.on("upgrade", (request, socket, head) =>
+    app.server.emit("upgrade", request, socket, head),
+  );
+  await new Promise((resolve) => gateway.listen(0, "127.0.0.1", resolve));
+  process.env.VITE_MULTIPLAYER_URL = `ws://127.0.0.1:${gateway.address().port}/ws`;
   vite = await createServer({
     server: { host: "127.0.0.1", port: 5173, strictPort: true },
     logLevel: "error",
@@ -119,7 +141,7 @@ try {
         page,
       );
       await writeFile(
-        "/tmp/brickfall-stage8-failure.png",
+        "/tmp/brickfall-stage9-failure.png",
         Buffer.from(screenshot.data, "base64"),
       );
     } catch {
@@ -162,7 +184,34 @@ try {
     b = await page();
   for (const p of [a, b])
     await evaluate(p, "document.getElementById('online-mode').click()");
+  assert.equal(healthRequests, 0, "Selecting a mode must not wake the server");
   await evaluate(a, "document.getElementById('duel-create').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Waking server')",
+  );
+  await wait(150);
+  assert(healthRequests > 0);
+  assert.equal(app.manager.rooms.size, 0);
+  await command("Page.bringToFront", {}, a);
+  const waking = await command("Page.captureScreenshot", { format: "png" }, a);
+  await writeFile(
+    "/tmp/brickfall-stage9-waking.png",
+    Buffer.from(waking.data, "base64"),
+  );
+  await evaluate(
+    a,
+    "document.getElementById('duel-cancel').click();document.getElementById('solo-mode').click()",
+  );
+  const cancelledHealth = healthRequests;
+  await wait(1100);
+  assert.equal(healthRequests, cancelledHealth);
+  assert(await evaluate(a, "!document.getElementById('solo-panel').hidden"));
+  healthReady = true;
+  await evaluate(
+    a,
+    "document.getElementById('online-mode').click();document.getElementById('duel-create').click()",
+  );
   await until(
     a,
     "document.getElementById('duel-room-code').textContent.length === 6",
@@ -263,7 +312,7 @@ try {
   await command("Page.bringToFront", {}, b);
   const waiting = await command("Page.captureScreenshot", { format: "png" }, b);
   await writeFile(
-    "/tmp/brickfall-stage8-reconnecting.png",
+    "/tmp/brickfall-stage9-reconnecting.png",
     Buffer.from(waiting.data, "base64"),
   );
   await wait(150);
@@ -289,7 +338,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage8-resuming.png",
+    "/tmp/brickfall-stage9-resuming.png",
     Buffer.from(resuming.data, "base64"),
   );
   await until(
@@ -518,7 +567,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage8-portrait.png",
+    "/tmp/brickfall-stage9-portrait.png",
     Buffer.from(portrait.data, "base64"),
   );
   await command(
@@ -540,7 +589,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage8-landscape.png",
+    "/tmp/brickfall-stage9-landscape.png",
     Buffer.from(landscape.data, "base64"),
   );
   const previousMatch = scenarioGame.matchId;
@@ -594,16 +643,20 @@ try {
   }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
   );
   console.log(
-    "Screenshots: /tmp/brickfall-stage8-portrait.png, /tmp/brickfall-stage8-landscape.png",
+    "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",
   );
 } finally {
   cdp?.close();
   chrome?.kill("SIGTERM");
   await vite?.close();
   await app?.close();
+  if (gateway) {
+    gateway.closeAllConnections();
+    await new Promise((resolve) => gateway.close(resolve));
+  }
   await wait(200);
   await rm(profile, { recursive: true, force: true });
 }

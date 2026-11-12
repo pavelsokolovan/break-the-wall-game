@@ -1,0 +1,29 @@
+# Provision this single Free service before setting the public Pages backend URL.
+services:
+  - type: web
+    name: brickfall-blitz-duel
+    runtime: node
+    plan: free
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 10
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://pavelsokolovan.github.io
+      - key: MAX_ROOMS
+        value: "20"
+      - key: MAX_SOCKETS
+        value: "100"
+      - key: LOG_LEVEL
+        value: info
+      # Leave empty until the actual ingress trust boundary is verified.
+      - key: TRUSTED_PROXY_CIDRS
+        value: ""

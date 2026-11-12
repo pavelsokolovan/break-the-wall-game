@@ -13,7 +13,10 @@ Completed locally: [Stage 1](ONLINE_DUEL_STAGE_01_SPEC.md),
 and [Stage 8](ONLINE_DUEL_STAGE_08_SPEC.md).
 Milestones A–C are playable locally, including full gameplay, recovery, smooth rendering,
 invitations, pause consent, rematches and separate Duel history.
-Next: Stage 9, free hosting and release configuration.
+[Stage 9](ONLINE_DUEL_STAGE_09_SPEC.md) repository implementation is complete locally:
+Render Free blueprint, cold-start UI, operations and CI/release instructions.
+Stage 9 hosted acceptance is pending Render account setup and an actual backend URL.
+Next: provision/validate the backend and Pages, then Stage 10 device acceptance.
 Hosted multiplayer is not deployed yet.
 
 | Stage                                        | Description                                                                                                                                                                   | Completion checkpoint                                                                 |
