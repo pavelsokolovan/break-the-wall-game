@@ -111,15 +111,20 @@ try {
       page,
       "JSON.stringify({status:document.getElementById('duel-status')?.textContent,hidden:document.hidden,rect:document.getElementById('duel-game')?.getBoundingClientRect().toJSON()})",
     );
-    const screenshot = await command(
-      "Page.captureScreenshot",
-      { format: "png" },
-      page,
-    );
-    await writeFile(
-      "/tmp/brickfall-stage6-failure.png",
-      Buffer.from(screenshot.data, "base64"),
-    );
+    try {
+      await command("Page.bringToFront", {}, page);
+      const screenshot = await command(
+        "Page.captureScreenshot",
+        { format: "png" },
+        page,
+      );
+      await writeFile(
+        "/tmp/brickfall-stage7-failure.png",
+        Buffer.from(screenshot.data, "base64"),
+      );
+    } catch {
+      // Preserve the failed assertion even if diagnostic capture is unavailable.
+    }
     throw new Error(`Browser condition timed out: ${expression}; ${details}`);
   }
   async function page() {
@@ -238,6 +243,59 @@ try {
       "parseInt(document.getElementById('duel-points').textContent)",
     ));
   assert(scoreTotal > 0, "No naturally earned brick points displayed");
+  // Force a real transport loss; the browser must reclaim the same seat without
+  // exposing its private token or creating a replacement room.
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('First to five')",
+  );
+  const recoveryRoom = [...app.manager.rooms.values()][0];
+  const recoveryMatch = recoveryRoom.game.matchId,
+    recoveryPlayer = recoveryRoom.seats[0].playerId,
+    previousToken = recoveryRoom.seats[0].token;
+  recoveryRoom.seats[0].socket.terminate();
+  await until(
+    b,
+    "document.getElementById('duel-status').textContent.includes('Waiting for reconnect')",
+  );
+  const frozenState = recoveryRoom.game.getState(),
+    frozenTick = recoveryRoom.game.tick;
+  await command("Page.bringToFront", {}, b);
+  const waiting = await command("Page.captureScreenshot", { format: "png" }, b);
+  await writeFile(
+    "/tmp/brickfall-stage7-reconnecting.png",
+    Buffer.from(waiting.data, "base64"),
+  );
+  await wait(150);
+  assert.equal(recoveryRoom.game.tick, frozenTick);
+  assert.deepEqual(recoveryRoom.game.getState(), frozenState);
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Both players connected')",
+  );
+  assert.equal(recoveryRoom.game.matchId, recoveryMatch);
+  assert.equal(recoveryRoom.seats[0].playerId, recoveryPlayer);
+  assert(recoveryRoom.seats[0].token !== previousToken);
+  assert.equal(
+    await evaluate(a, "document.getElementById('duel-room-code').textContent"),
+    code,
+  );
+  assert(await evaluate(a, "document.getElementById('duel-action').disabled"));
+  assert.equal(recoveryRoom.game.tick, frozenTick);
+  await command("Page.bringToFront", {}, a);
+  const resuming = await command(
+    "Page.captureScreenshot",
+    { format: "png" },
+    a,
+  );
+  await writeFile(
+    "/tmp/brickfall-stage7-resuming.png",
+    Buffer.from(resuming.data, "base64"),
+  );
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('First to five')",
+  );
   // Controlled, trusted server fixtures exercise power/armor rendering after natural play.
   // No fixture or mutation endpoint is exposed to browser clients.
   await until(
@@ -433,7 +491,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage6-portrait.png",
+    "/tmp/brickfall-stage7-portrait.png",
     Buffer.from(portrait.data, "base64"),
   );
   await command(
@@ -455,7 +513,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage6-landscape.png",
+    "/tmp/brickfall-stage7-landscape.png",
     Buffer.from(landscape.data, "base64"),
   );
   await evaluate(
@@ -480,10 +538,10 @@ try {
   }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; portrait and landscape fit; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; same-seat reconnect/countdown; portrait and landscape fit; no runtime exceptions.",
   );
   console.log(
-    "Screenshots: /tmp/brickfall-stage6-portrait.png, /tmp/brickfall-stage6-landscape.png",
+    "Screenshots: /tmp/brickfall-stage7-portrait.png, /tmp/brickfall-stage7-landscape.png",
   );
 } finally {
   cdp?.close();

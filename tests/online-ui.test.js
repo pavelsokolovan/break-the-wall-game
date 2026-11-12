@@ -357,6 +357,7 @@ test("stale snapshots freeze inputs and event IDs deduplicate audio", async (t) 
   f.frame();
   assert(!socket.sent.some((m) => m.type === "input"));
   socket.receive({ ...actionable, tick: 183 });
+  f.$("duel-action").click();
   f.frame();
   assert(socket.sent.some((m) => m.type === "input"));
   f.window.confirm = () => false;
@@ -700,4 +701,78 @@ test("shots, cannons and held balls mirror for slot one and weapon effects dedup
   socket.receive(events);
   socket.receive(events);
   assert.deepEqual(f.sounds, ["pickup", "launch", "fire", "explosion"]);
+});
+
+test("reconnect freezes actions, preserves Solo saves, and confirmed Solo escape cancels retries", async (t) => {
+  const f = fixture(t),
+    socket = await f.join(),
+    s = snapshot();
+  s.state.players[0].ammo = 5;
+  socket.receive(s);
+  f.frame();
+  f.window.localStorage.setItem("brickfall-blitz:v1", "solo-unchanged");
+  socket.close();
+  assert(f.ui.client.recovering);
+  assert.match(f.$("duel-status").textContent, /Reconnecting/);
+  assert(f.$("duel-action").disabled);
+  const count = socket.sent.length;
+  f.$("duel-action").click();
+  f.frame();
+  assert.equal(socket.sent.length, count);
+  f.window.confirm = () => false;
+  f.$("solo-mode").click();
+  assert(!f.$("duel-panel").hidden);
+  f.window.confirm = () => true;
+  f.$("solo-mode").click();
+  assert(!f.$("solo-panel").hidden);
+  assert(!f.ui.client.recovering);
+  assert.equal(
+    f.window.localStorage.getItem("brickfall-blitz:v1"),
+    "solo-unchanged",
+  );
+  assert.equal(
+    f.window.sessionStorage.getItem("brickfall-blitz:duel:session:v1"),
+    null,
+  );
+});
+
+test("recovery countdown shows the frozen deadline, disables actions and deduplicates effects after resync", async (t) => {
+  const f = fixture(t),
+    socket = await f.join(),
+    s = snapshot();
+  s.state.players[0].ammo = 5;
+  socket.receive(s);
+  const events = {
+    type: "events",
+    matchId: "m",
+    items: [
+      {
+        id: 1,
+        tick: 180,
+        type: "paddle_hit",
+        slot: 0,
+        ballId: s.state.balls[0].id,
+      },
+    ],
+  };
+  socket.receive(events);
+  socket.receive({ ...welcome(0), resumed: true });
+  const countdown = structuredClone(s);
+  countdown.phase = "countdown";
+  countdown.state.pause = {
+    reason: "reconnect",
+    deadlineServerTime: 6000,
+    resumePhase: "playing",
+  };
+  countdown.state.countdownRemainingMs = 3000;
+  socket.receive(countdown);
+  f.frame();
+  assert.match(f.$("duel-status").textContent, /resuming in 3/);
+  assert(f.$("duel-action").disabled);
+  const count = socket.sent.length;
+  f.window.dispatchEvent(new f.window.KeyboardEvent("keydown", { key: " " }));
+  f.frame();
+  assert.equal(socket.sent.length, count);
+  socket.receive(events);
+  assert.deepEqual(f.sounds, ["paddle"]);
 });

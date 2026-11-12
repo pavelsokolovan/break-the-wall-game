@@ -1,3 +1,4 @@
+import { DuelSync, ServerClock } from "./duel-sync.js";
 import { OnlineClient, multiplayerUrl } from "./online-client.js";
 import { drawDuel } from "./duel-view.js";
 import {
@@ -31,16 +32,19 @@ export function mountMultiplayer({
     generation = 0,
     tap = null,
     lastEventId = 0,
-    eventMatchId = null;
+    eventMatchId = null,
+    viewSlot = null;
   const keys = new Set();
+  const clock = new ServerClock(),
+    sync = new DuelSync({ clock });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
   function status(text) {
     $("duel-status").textContent = text;
   }
   function controls() {
-    $("duel-create").disabled = pending || !!room || !url;
-    $("duel-join").disabled = pending || !!room || !url;
-    $("duel-code").disabled = pending || !!room;
+    $("duel-create").disabled = pending || !!room || client.recovering || !url;
+    $("duel-join").disabled = pending || !!room || client.recovering || !url;
+    $("duel-code").disabled = pending || !!room || client.recovering;
     $("duel-ready").hidden = !room || !!snapshot;
     $("duel-ready").disabled = !room?.players.every((p) => p.connected);
     $("duel-leave").hidden = !room;
@@ -48,14 +52,38 @@ export function mountMultiplayer({
   }
   const client = clientFactory({
     now,
+    clock,
+    storage: (() => {
+      try {
+        return win.sessionStorage;
+      } catch {
+        return null;
+      }
+    })(),
+    onInput(input) {
+      sync.recordInput(input);
+    },
     onStatus(text) {
       if (!result) status(text);
+      if (client.recovering || !client.socket) {
+        inactive();
+        sync.pending = [];
+        sync.desired = null;
+      }
+      controls();
       if (!client.socket && room && !result) {
         $("duel-ready").disabled = true;
         $("duel-action").disabled = true;
       }
     },
     onMessage(message) {
+      if (message.type === "welcome") {
+        viewSlot = message.slot;
+        sync.reset();
+        inactive();
+        if (message.resumed) status("Seat restored. Synchronizing…");
+        controls();
+      }
       if (message.type === "room") {
         room = message;
         $("duel-room-code").textContent = message.code;
@@ -69,6 +97,10 @@ export function mountMultiplayer({
           ? "NOT READY"
           : "READY";
         controls();
+        if (message.phase === "reconnecting") {
+          inactive();
+          status("Waiting for the other player to reconnect…");
+        }
       }
       if (message.type === "snapshot") {
         if (
@@ -79,6 +111,7 @@ export function mountMultiplayer({
           return;
         snapshot = message;
         receivedAt = now();
+        sync.push(message, receivedAt, client.slot);
         canvas.hidden = false;
         $("duel-hud").hidden = false;
         $("duel-action").hidden = false;
@@ -94,6 +127,7 @@ export function mountMultiplayer({
             ? `FIRE (${local.ammo})`
             : "AUTO SERVE";
         $("duel-action").disabled =
+          client.recovering ||
           message.phase !== "playing" ||
           (!held && (local.ammo <= 0 || local.fireCooldownMs > 0));
         $("duel-slots").hidden = true;
@@ -107,14 +141,7 @@ export function mountMultiplayer({
           target = null;
           action = "none";
         }
-        if (!result)
-          status(
-            message.phase === "playing"
-              ? "First to five · drag or ← → / A D"
-              : message.phase === "finished"
-                ? "Match finished"
-                : "Get ready · automatic serve",
-          );
+        if (!result) showSnapshotStatus(message);
       }
       if (message.type === "events") {
         if (eventMatchId !== message.matchId) {
@@ -148,10 +175,11 @@ export function mountMultiplayer({
         );
         $("duel-action").disabled = true;
       }
-      if (message.type === "error") status(message.message);
+      if (message.type === "error" && !result) status(message.message);
     },
   });
   function reset() {
+    sync.reset();
     room = null;
     snapshot = null;
     result = null;
@@ -182,7 +210,6 @@ export function mountMultiplayer({
       !online &&
       snapshot &&
       !result &&
-      client.socket?.readyState === 1 &&
       !win.confirm("Leave this match? Your opponent wins by forfeit.")
     )
       return;
@@ -195,11 +222,14 @@ export function mountMultiplayer({
     $("solo-mode").setAttribute("aria-pressed", String(!active));
     $("online-mode").setAttribute("aria-pressed", String(active));
     if (active) {
-      status(
-        url
-          ? "Create a room or enter a friend’s code."
-          : "Online Duel is unavailable here. A multiplayer server must be configured. Solo is ready to play.",
-      );
+      const recovering =
+        url && client.hasSession(url) && client.resumeSaved(url);
+      if (!recovering)
+        status(
+          url
+            ? "Create a room or enter a friend’s code."
+            : "Online Duel is unavailable here. A multiplayer server must be configured. Solo is ready to play.",
+        );
       if (raf === null) {
         lastFrame = null;
         raf = win.requestAnimationFrame(frame);
@@ -257,7 +287,6 @@ export function mountMultiplayer({
     if (
       snapshot &&
       !result &&
-      client.socket?.readyState === 1 &&
       !win.confirm("Leave this match? Your opponent wins by forfeit.")
     )
       return;
@@ -265,7 +294,11 @@ export function mountMultiplayer({
     status("Create a room or enter a friend’s code.");
   };
   function queueAction(type) {
-    if (snapshot?.phase === "playing") {
+    if (
+      !client.recovering &&
+      client.socket?.readyState === 1 &&
+      snapshot?.phase === "playing"
+    ) {
       action =
         action === "release_fire" || type === "release_fire"
           ? "release_fire"
@@ -282,7 +315,14 @@ export function mountMultiplayer({
     };
   }
   canvas.addEventListener("pointerdown", (e) => {
-    if (e.isPrimary === false || !snapshot || snapshot.phase !== "playing")
+    if (
+      e.isPrimary === false ||
+      client.recovering ||
+      client.socket?.readyState !== 1 ||
+      client.slot === null ||
+      !snapshot ||
+      snapshot.phase !== "playing"
+    )
       return;
     const p = snapshot.state.players[client.slot],
       center = worldToViewPoint(client.slot, { x: p.x, y: 0 }).x,
@@ -351,6 +391,31 @@ export function mountMultiplayer({
   doc.addEventListener("visibilitychange", () => {
     if (doc.hidden) inactive();
   });
+  function showSnapshotStatus(s) {
+    const pause = s.state.pause;
+    if (pause && (s.phase === "reconnecting" || s.phase === "paused")) {
+      const left = Math.max(
+        0,
+        Math.ceil((pause.deadlineServerTime - clock.serverNow(now())) / 1000),
+      );
+      status(
+        pause.reason === "server_busy"
+          ? "Server busy. Match frozen while it recovers…"
+          : `Waiting for reconnect… ${left}s remaining`,
+      );
+    } else if (pause && s.phase === "countdown")
+      status(
+        `Both players connected · resuming in ${Math.ceil(s.state.countdownRemainingMs / 1000)}…`,
+      );
+    else
+      status(
+        s.phase === "playing"
+          ? "First to five · drag or ← → / A D"
+          : s.phase === "finished"
+            ? "Match finished"
+            : "Get ready · automatic serve",
+      );
+  }
   function frame(time) {
     if (!active) {
       raf = null;
@@ -361,7 +426,18 @@ export function mountMultiplayer({
         ? 0
         : Math.min(0.05, Math.max(0, (time - lastFrame) / 1000));
     lastFrame = time;
+    if (!snapshot && room?.phase === "reconnecting" && !client.recovering)
+      status(
+        `Waiting for reconnect… ${Math.max(0, Math.ceil((room.reconnectDeadlineServerTime - clock.serverNow(now())) / 1000))}s remaining`,
+      );
     if (snapshot) {
+      if (
+        !result &&
+        !client.recovering &&
+        snapshot.phase !== "playing" &&
+        snapshot.state.pause
+      )
+        showSnapshotStatus(snapshot);
       const available = Math.max(
         80,
         win.innerHeight - canvas.getBoundingClientRect().top - 68,
@@ -373,18 +449,30 @@ export function mountMultiplayer({
       canvas.style.width = `${Math.floor(width)}px`;
       canvas.style.height = `${Math.floor((width * R.height) / R.width)}px`;
       const stale = !result && now() - receivedAt > 250;
-      if (stale && client.socket?.readyState === 1)
+      if (stale) {
+        inactive();
+        sync.desired = null;
+        $("duel-action").disabled = true;
+      }
+      if (
+        stale &&
+        !client.recovering &&
+        snapshot.phase === "playing" &&
+        client.socket?.readyState === 1
+      )
         status("Waiting for server… play is frozen on this screen.");
       if (
         !stale &&
         snapshot.phase === "playing" &&
+        !client.recovering &&
         client.socket?.readyState === 1
       ) {
         const direction =
           (keys.has("arrowright") || keys.has("d") ? 1 : 0) -
           (keys.has("arrowleft") || keys.has("a") ? 1 : 0);
         const p = snapshot.state.players[client.slot];
-        const viewX = client.slot === 0 ? p.x : R.width - p.x;
+        const localX = sync.local?.x ?? p.x;
+        const viewX = client.slot === 0 ? localX : R.width - localX;
         if (direction)
           target = Math.max(
             p.width / 2 / R.width,
@@ -394,6 +482,7 @@ export function mountMultiplayer({
                 (direction * R.keyboardSpeed * dt) / R.width,
             ),
           );
+        if (target !== null) sync.setTarget(target, now());
         if (
           (target !== null || action !== "none") &&
           client.input(target ?? viewX / R.width, action)
@@ -402,9 +491,18 @@ export function mountMultiplayer({
           if (!direction) target = null;
         }
       }
-      drawDuel(canvas, snapshot, client.slot ?? 0, {
-        motion: !motionQuery?.matches,
-      });
+      const presented = sync.frame(
+        now(),
+        client.socket?.readyState === 1 && !client.recovering,
+      );
+      drawDuel(
+        canvas,
+        presented?.snapshot ?? snapshot,
+        client.slot ?? viewSlot ?? 0,
+        {
+          motion: !motionQuery?.matches,
+        },
+      );
     }
     raf = win.requestAnimationFrame(frame);
   }

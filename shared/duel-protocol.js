@@ -275,9 +275,12 @@ const serverSchemas = {
     token,
     matchId: nullable(matchId),
     nextInputSeq: positive,
+    resumed: optional(bool),
   },
   room: {
     code,
+    serverTime: optional(nonnegative),
+    reconnectDeadlineServerTime: optional(nullable(nonnegative)),
     phase: roomPhase,
     players: array(object({ slot, connected: bool, ready: bool }), 2),
   },
@@ -300,6 +303,7 @@ const serverSchemas = {
   },
   error: {
     code: enumeration(...ERROR_CODES),
+    terminal: optional(bool),
     requestId: optional(requestId),
     message: string(256),
   },

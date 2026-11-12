@@ -28,7 +28,7 @@ export class Bucket {
   }
 }
 export function send(socket, message) {
-  if (socket.readyState !== 1) return false;
+  if (!socket || socket.readyState !== 1) return false;
   if (socket.bufferedAmount > LIMITS.bufferedBytes) {
     socket.close(1013, "Connection too slow");
     return false;
@@ -36,12 +36,13 @@ export function send(socket, message) {
   socket.send(JSON.stringify(message));
   return true;
 }
-export function error(socket, code, message, requestId) {
+export function error(socket, code, message, requestId, terminal = false) {
   send(socket, {
     v: 1,
     type: "error",
     code,
     message,
     ...(requestId ? { requestId } : {}),
+    ...(terminal ? { terminal: true } : {}),
   });
 }

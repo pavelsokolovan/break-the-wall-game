@@ -33,7 +33,7 @@ class Peer {
       await new Promise((resolve) => setTimeout(resolve, 2));
     }
     throw new Error(
-      `Timed out waiting for ${type}: ${JSON.stringify(this.messages.slice(-3))}`,
+      `Timed out waiting for ${type}: ${JSON.stringify(this.messages.slice(-3).map(({ token, ...message }) => message))}`,
     );
   }
 }
@@ -73,9 +73,9 @@ async function fixture(t, options = {}) {
     a.send({ type: "create", requestId: "c" });
     const welcome = await a.next("welcome");
     b.send({ type: "join", requestId: "j", code: welcome.code.toLowerCase() });
-    await b.next("welcome");
+    const joined = await b.next("welcome");
     await a.next("room", (r) => r.players.every((p) => p.connected));
-    return { a, b, code: welcome.code };
+    return { a, b, code: welcome.code, welcome, joined };
   }
   return {
     app,
@@ -164,7 +164,12 @@ test(
     assert.equal((await c.next("error")).code, "ROOM_FULL");
     c.send({ type: "join", requestId: "unknown", code: "AAAAAA" });
     assert.equal((await c.next("error")).code, "ROOM_NOT_FOUND");
-    c.send({ type: "resume", requestId: "r", code: w.code, token: w.token });
+    c.send({
+      type: "resume",
+      requestId: "r",
+      code: w.code,
+      token: "invalid-token",
+    });
     assert.equal((await c.next("error")).code, "AUTH_FAILED");
     a.send({ type: "input", seq: 1, x: 1, action: "none" });
     assert.equal((await a.next("error")).code, "INVALID_PHASE");
@@ -199,26 +204,43 @@ test(
 );
 
 test(
-  "live disconnect interrupts without a fabricated result; lobby disconnect frees seat",
+  "lobby disconnect reserves its seat until authenticated resume",
   { timeout: 10000 },
   async (t) => {
     const f = await fixture(t),
-      { a, b, code } = await f.room();
+      { a, b, code, welcome } = await f.room();
     a.socket.close();
     await b.next("room", (r) => !r.players[0].connected);
     const c = await f.peer();
-    c.send({ type: "join", requestId: "replacement", code });
-    const w = await c.next("welcome");
-    assert.equal(w.slot, 0);
-    c.send({ type: "ready", ready: true });
-    b.send({ type: "ready", ready: true });
-    await b.next("snapshot");
-    c.socket.close();
-    const error = await b.next("error");
-    assert.match(error.message, /interrupted/i);
-    await b.closed;
-    assert.equal(f.app.manager.rooms.has(code), false);
-    assert(!b.messages.some((m) => m.type === "result"));
+    c.send({ type: "join", requestId: "third", code });
+    assert.equal((await c.next("error")).code, "ROOM_FULL");
+    c.send({ type: "resume", requestId: "resume", code, token: welcome.token });
+    const restored = await c.next("welcome");
+    assert.equal(restored.slot, 0);
+    assert.equal(restored.playerId, welcome.playerId);
+    assert.notEqual(restored.token, welcome.token);
+    const lobby = await b.next("room", (r) =>
+      r.players.every((p) => p.connected),
+    );
+    assert.equal(lobby.phase, "lobby");
+    assert(!lobby.players[0].ready);
+
+    // A never-occupied second seat must not keep a recovered host in grace.
+    const host = await f.peer();
+    host.send({ type: "create", requestId: "solo-host" });
+    const hosted = await host.next("welcome");
+    host.socket.close();
+    await host.closed;
+    const recovered = await f.peer();
+    recovered.send({
+      type: "resume",
+      requestId: "lone-resume",
+      code: hosted.code,
+      token: hosted.token,
+    });
+    await recovered.next("welcome");
+    assert.equal((await recovered.next("room")).phase, "lobby");
+    assert.equal(f.app.manager.rooms.get(hosted.code).recovery, null);
   },
 );
 
@@ -342,6 +364,13 @@ test(
     f.app.manager.advance();
     assert.equal(game.tick, 5);
     assert.deepEqual(game.state.goals, [0, 0]);
+    const frozen = await b.next("snapshot", (s) => s.phase === "paused");
+    assert.equal(frozen.state.pause.reason, "server_busy");
+    assert.equal(f.app.manager.rooms.size, 1);
+    f.setClock(1800);
+    f.app.manager.advance();
+    f.setClock(2600);
+    f.app.manager.advance();
     assert.match((await b.next("error")).message, /stalled/i);
     assert.equal(f.app.manager.rooms.size, 0);
   },
@@ -376,10 +405,14 @@ test("limiter refill, send backpressure, expiry and heartbeat cleanup are bounde
   manager.attach(socket, "local");
   manager.handle(socket, { type: "create", v: 1, requestId: "c" });
   now = 600001;
+  manager.connections.get(socket).lastPong = now;
   manager.maintenance(now);
   assert.equal(manager.rooms.size, 0);
-  assert(terminated);
   assert.match(messages.at(-1).message, /expired/i);
+  manager.attach(socket, "heartbeat");
+  now += 25001;
+  manager.maintenance(now);
+  assert(terminated);
   manager.attempt("other");
   now += 60001;
   manager.maintenance(now);
@@ -616,5 +649,300 @@ test(
     );
     assert.equal(g.state.players[0].points, points + 100);
     assert.equal(g.state.players[0].damage, 0);
+  },
+);
+
+test(
+  "same-seat resume preserves frozen powers/balls/waves and input sequence through recovery countdown",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const g = f.app.manager.rooms.get(code).game;
+    Object.assign(g.state.balls[0], {
+      owner: 0,
+      held: true,
+      heldOffsetX: 20,
+      autoReleaseRemainingMs: 2400,
+      vx: 0,
+      vy: 0,
+    });
+    g.followHeldBalls();
+    g.state.players[0].wideRemainingMs = 12000;
+    g.state.players[0].ammo = 4;
+    a.send({ type: "input", seq: 42, x: 0.7, action: "none" });
+    await turn();
+    await turn();
+    await f.advance(3);
+    a.socket.close();
+    await b.next("snapshot", (s) => s.phase === "reconnecting");
+    const frozen = g.getState(),
+      tick = g.tick;
+    await f.advance(60);
+    assert.equal(g.tick, tick);
+    assert.deepEqual(g.getState(), frozen);
+    const stranger = await f.peer();
+    stranger.send({ type: "join", requestId: "steal", code });
+    assert.equal((await stranger.next("error")).code, "ROOM_FULL");
+    stranger.send({ type: "resume", requestId: "bad", code, token: "wrong" });
+    assert.equal((await stranger.next("error")).code, "AUTH_FAILED");
+    const restored = await f.peer();
+    restored.send({
+      type: "resume",
+      requestId: "resume",
+      code,
+      token: welcome.token,
+    });
+    const w = await restored.next("welcome");
+    assert.equal(w.slot, 0);
+    assert.equal(w.playerId, welcome.playerId);
+    assert.notEqual(w.token, welcome.token);
+    assert.equal(w.nextInputSeq, 43);
+    assert.equal(w.matchId, g.matchId);
+    const full = await restored.next(
+      "snapshot",
+      (s) => s.phase === "countdown" && s.state.pause?.reason === "reconnect",
+    );
+    assert.equal(full.state.players[0].connected, true);
+    assert.deepEqual(full.state.balls, frozen.balls);
+    restored.send({ type: "input", seq: 43, x: 0, action: "fire" });
+    assert.equal((await restored.next("error")).code, "INVALID_PHASE");
+    await f.advance(179);
+    assert.equal(g.tick, tick);
+    assert.deepEqual(g.getState(), frozen);
+    await f.advance(2);
+    assert.equal(g.phase, "playing");
+    assert.equal(g.state.players[0].ammo, 4);
+    assert.equal(g.state.players[0].lastAckInputSeq, 42);
+    restored.send({ type: "input", seq: 43, x: 0.4, action: "none" });
+    await turn();
+    await turn();
+    await f.advance(3);
+    assert.equal(g.state.players[0].lastAckInputSeq, 43);
+    stranger.send({
+      type: "resume",
+      requestId: "old-token",
+      code,
+      token: welcome.token,
+    });
+    assert.equal((await stranger.next("error")).code, "AUTH_FAILED");
+  },
+);
+
+test(
+  "live socket replacement rotates once per request and stale socket cannot control the seat",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const replacement = await f.peer();
+    replacement.send({
+      type: "resume",
+      requestId: "r",
+      code,
+      token: welcome.token,
+    });
+    const w = await replacement.next("welcome");
+    await a.closed;
+    replacement.send({
+      type: "resume",
+      requestId: "r",
+      code,
+      token: welcome.token,
+    });
+    assert.deepEqual(await replacement.next("welcome"), w);
+    const room = f.app.manager.rooms.get(code);
+    assert.equal(room.seats[0].socket.readyState, 1);
+    assert.equal(room.game.phase, "paused");
+    assert.equal(room.seats[0].playerId, welcome.playerId);
+    assert(
+      !JSON.stringify(b.messages.filter((m) => m.type !== "welcome")).includes(
+        w.token,
+      ),
+    );
+  },
+);
+
+test(
+  "grace expiry awards the connected opponent a retained forfeit result; late resume receives it",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    a.socket.close();
+    await b.next("snapshot", (s) => s.phase === "reconnecting");
+    const room = f.app.manager.rooms.get(code),
+      deadline = room.recovery.deadline;
+    f.setClock(deadline);
+    for (const c of f.app.manager.connections.values()) c.lastPong = deadline;
+    f.app.manager.maintenance(deadline);
+    const result = await b.next("result");
+    assert.equal(result.winner, 1);
+    assert.equal(result.reason, "forfeit");
+    assert.equal(room.game.phase, "finished");
+    const late = await f.peer();
+    late.send({
+      type: "resume",
+      requestId: "late",
+      code,
+      token: welcome.token,
+    });
+    await late.next("welcome");
+    assert.deepEqual(await late.next("result"), result);
+  },
+);
+
+test(
+  "both absent abandon without result; disconnected lobby seats expire without a competitive outcome",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    a.socket.close();
+    b.socket.close();
+    await Promise.all([a.closed, b.closed]);
+    await turn();
+    await turn();
+    const room = f.app.manager.rooms.get(code);
+    const deadline = room.recovery.deadline;
+    f.setClock(deadline);
+    f.app.manager.maintenance(deadline);
+    assert(!f.app.manager.rooms.has(code));
+    assert.equal(room.game.getResult(), null);
+    const lobby = await f.room();
+    lobby.a.socket.close();
+    await lobby.b.next("room", (r) => !r.players[0].connected);
+    const r = f.app.manager.rooms.get(lobby.code);
+    f.setClock(r.recovery.deadline);
+    for (const c of f.app.manager.connections.values())
+      c.lastPong = f.app.manager.now();
+    f.app.manager.maintenance(f.app.manager.now());
+    assert.equal(r.seats[0], null);
+    assert.equal(r.game, null);
+    assert(!lobby.b.messages.some((m) => m.type === "result"));
+  },
+);
+
+test(
+  "initial and goal countdowns retain their original simulation timers across disconnect",
+  { timeout: 10000 },
+  async (t) => {
+    for (const goal of [false, true]) {
+      const f = await fixture(t),
+        { a, b, code, welcome } = await f.room();
+      a.send({ type: "ready", ready: true });
+      b.send({ type: "ready", ready: true });
+      await a.next("snapshot");
+      await f.advance(goal ? 180 : 30);
+      const g = f.app.manager.rooms.get(code).game;
+      if (goal) {
+        Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
+        await f.advance(1);
+        await f.advance(15);
+      }
+      const originalPhase = g.phase,
+        remaining = g.state.countdownRemainingMs,
+        tick = g.tick;
+      a.socket.close();
+      await b.next("snapshot", (s) => s.phase === "reconnecting");
+      const resumed = await f.peer();
+      resumed.send({
+        type: "resume",
+        requestId: "r",
+        code,
+        token: welcome.token,
+      });
+      await resumed.next("welcome");
+      await f.advance(179);
+      assert.equal(g.tick, tick);
+      assert.equal(g.state.countdownRemainingMs, remaining);
+      await f.advance(2);
+      assert.equal(g.phase, originalPhase);
+      assert(
+        g.state.countdownRemainingMs <= remaining &&
+          g.state.countdownRemainingMs >= remaining - 34,
+      );
+    }
+  },
+);
+
+test(
+  "disconnect during recovery countdown cannot extend grace or allow stale inputs",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    a.socket.close();
+    await b.next("snapshot", (s) => s.phase === "reconnecting");
+    const room = f.app.manager.rooms.get(code),
+      deadline = room.recovery.deadline;
+    const restored = await f.peer();
+    restored.send({
+      type: "resume",
+      requestId: "r",
+      code,
+      token: welcome.token,
+    });
+    await restored.next("welcome");
+    await f.advance(60);
+    restored.socket.close();
+    await restored.closed;
+    await turn();
+    await turn();
+    assert.equal(room.recovery.deadline, deadline);
+    assert.equal(room.game.phase, "paused");
+    assert.equal(room.game.state.players[0].vx, 0);
+  },
+);
+
+test(
+  "one stall recovers only after healthy time and synchronized countdown without changing gameplay state",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const room = f.app.manager.rooms.get(code),
+      g = room.game,
+      saved = g.getState(),
+      tick = g.tick;
+    f.setClock(f.app.manager.now() + 600);
+    f.app.manager.advance();
+    assert.equal(room.recovery.kind, "server_busy");
+    assert.deepEqual(g.getState(), saved);
+    await f.advance(60);
+    assert.equal(g.tick, tick);
+    await f.advance(2);
+    assert.equal(room.recovery.kind, "countdown");
+    const resumeAt = room.recovery.deadline;
+    while (f.app.manager.now() + 20 < resumeAt) await f.advance(1);
+    assert.equal(g.tick, tick);
+    await f.advance(3);
+    assert.equal(g.phase, "playing");
+    assert(g.tick > tick);
+    assert.deepEqual(g.state.goals, [0, 0]);
   },
 );

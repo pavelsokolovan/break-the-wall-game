@@ -7,7 +7,8 @@ A browser arcade game with original pixel graphics, synthesized chiptune sounds,
 The game has two separate modes: **Solo**, the existing single-player campaign, and
 **Online Duel**, the additional two-player online mode. Solo stays available without
 a multiplayer backend and keeps its existing saves. Online Duel is currently a local
-preview; reconnect/session reliability and hosted deployment remain later stages.
+preview with connection recovery; the remaining session features and hosted deployment
+are later stages.
 
 ## Play
 
@@ -88,7 +89,7 @@ Bazooka pickups add five stored shots, capped at fifteen. The cannon is visible 
 
 ## Online Duel local preview
 
-[Stage 6](docs/ONLINE_DUEL_STAGE_06_SPEC.md) builds on private rooms and readiness
+[Stage 7](docs/ONLINE_DUEL_STAGE_07_SPEC.md) builds on private rooms and readiness
 with symmetric central walls, opposite paddles, automatic serves, damage, and first-to-five
 results. Break bricks for personal points and independent combos; goals decide the winner.
 Walls include armor, explosive chains, reinforced plates, and isolated steel as waves
@@ -125,8 +126,19 @@ npm run dev
 
 Open the Vite URL in two tabs. Select **Online Duel**, create a room in one tab, join
 its six-character code in the other, and press **Ready** in both. Move with drag,
-mouse, arrows, or A/D. Serves are automatic; tap/Space releases and fires, F fires only. Leave a live match to forfeit. An unexpected
-disconnect interrupts the match; create a new room to play again.
+mouse, arrows, or A/D. Serves are automatic; tap/Space releases and fires, F fires only.
+Leave a live match to forfeit. An unexpected disconnect freezes gameplay and reserves
+the seat for 30 seconds. The client retries automatically; once both players are back,
+a three-second countdown resumes the same match with its timers and powers preserved.
+If only one player returns, the other forfeits when grace expires; if neither returns,
+the match is abandoned without a winner. A server restart loses its in-memory rooms
+and shows an interruption.
+
+The private seat token is kept in this tab's session storage, separately from Solo
+saves. After a reload, select Online Duel to attempt recovery on the same backend.
+Selecting Solo or leaving clears that identity and cancels recovery. Paddle movement
+is predicted locally and remote motion is interpolated; collisions, actions and scores
+remain authoritative on the server. Stale state freezes movement and disables actions.
 
 For LAN development, copy `.env.example` to `.env` and add the frontend's actual LAN
 origin to `ALLOWED_ORIGINS`; both devices need access to frontend port 5173 and server
@@ -134,10 +146,8 @@ port 3001. The development client uses the frontend hostname on port 3001. Produ
 requires public `VITE_MULTIPLAYER_URL=wss://<actual-backend>/ws`; without it, Online Duel
 shows an unavailable message. No hosted backend has been provisioned in this stage.
 
-Reconnect/resume, rematches, online pause, invitations, duel history,
-interpolation, and free-host deployment remain in later stages. The preview shows
-latest authoritative snapshots, freezes visibly when stale, and never computes client
-ball collisions or scores. The server enforces Origin checks, message and resource
+Rematches, online pause, invitations, duel history and free-host deployment remain in
+later stages. The server enforces Origin checks, message and resource
 limits, input sequencing, bounded send buffers, and idle cleanup. Forwarded IP headers
 are ignored until trusted proxy configuration is implemented.
 

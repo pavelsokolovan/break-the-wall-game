@@ -1,4 +1,9 @@
-import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import {
+  randomBytes,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import { DuelGame } from "../shared/duel-game.js";
 import { ROOM_CODE_ALPHABET, DUEL_RULES as R } from "../shared/duel-rules.js";
 import { Bucket, LIMITS, error, send } from "./protocol.js";
@@ -11,9 +16,116 @@ export class RoomManager {
     this.rooms = new Map();
     this.connections = new Map();
     this.ipAttempts = new Map();
+    this.resumeAttempts = new Map();
     this.lastTime = now();
     this.accumulator = 0;
   }
+  connected(seat) {
+    return !!seat?.socket && seat.socket.readyState === 1;
+  }
+  effectivePhase(room) {
+    if (room.recovery?.kind === "reconnect") return "reconnecting";
+    if (room.recovery?.kind === "countdown") return "countdown";
+    if (room.recovery?.kind === "server_busy") return "paused";
+    return room.game?.phase || "lobby";
+  }
+  welcome(connection, requestId, resumed) {
+    const room = connection.room,
+      seat = room.seats[connection.slot];
+    return {
+      v: 1,
+      type: "welcome",
+      requestId,
+      code: room.code,
+      playerId: seat.playerId,
+      slot: connection.slot,
+      token: seat.token,
+      matchId: room.game?.matchId || null,
+      nextInputSeq:
+        (room.game?.state.players[connection.slot].lastAckInputSeq || 0) + 1,
+      resumed,
+    };
+  }
+  freeze(room) {
+    if (room.game && LIVE.includes(room.game.phase)) room.game.setPaused(true);
+  }
+  recoveryCountdown(room, graceDeadline = null) {
+    if (!room.game || room.game.phase === "finished") {
+      room.recovery = null;
+      return;
+    }
+    this.freeze(room);
+    room.recovery = {
+      kind: "countdown",
+      deadline: this.now() + 3000,
+      graceDeadline,
+    };
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
+  reserve(room) {
+    if (room.game?.phase === "finished") return;
+    this.freeze(room);
+    const graceDeadline = room.recovery?.graceDeadline ?? this.now() + 30000;
+    room.recovery = {
+      kind: "reconnect",
+      deadline: graceDeadline,
+      graceDeadline,
+    };
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
+  resumeSeat(connection, message, fail, respond) {
+    let limiter = this.resumeAttempts.get(connection.ip);
+    if (!limiter) {
+      limiter = new Bucket(20, 20 / 60, this.now());
+      this.resumeAttempts.set(connection.ip, limiter);
+    }
+    if (!limiter.take(this.now()))
+      return fail("RATE_LIMITED", "Too many resume attempts.");
+    this.maintenance(this.now());
+    const room = this.rooms.get(message.code);
+    if (!room)
+      return fail("ROOM_NOT_FOUND", "Session unavailable. Match interrupted.");
+    const supplied = Buffer.from(message.token);
+    const slot = room.seats.findIndex((seat) => {
+      if (!seat) return false;
+      const expected = Buffer.from(seat.token);
+      return (
+        expected.length === supplied.length &&
+        timingSafeEqual(expected, supplied)
+      );
+    });
+    if (slot < 0) return fail("AUTH_FAILED", "Unable to resume this session.");
+    const seat = room.seats[slot],
+      oldSocket = seat.socket;
+    if (oldSocket && oldSocket !== connection.socket) {
+      const old = this.connections.get(oldSocket);
+      if (old) {
+        old.room = null;
+        old.slot = null;
+      }
+      oldSocket.close(4001, "Seat resumed elsewhere");
+    }
+    seat.token = randomBytes(16).toString("hex");
+    seat.socket = connection.socket;
+    if (!room.game) seat.ready = false;
+    connection.room = room;
+    connection.slot = slot;
+    respond(this.welcome(connection, message.requestId, true));
+    if (room.game?.phase === "finished") {
+      send(connection.socket, this.roomMessage(room));
+      this.snapshot(room);
+      send(connection.socket, room.game.getResult());
+      return;
+    }
+    if (room.seats.every((s) => !s || this.connected(s)))
+      this.recoveryCountdown(room, room.recovery?.graceDeadline ?? null);
+    else if (room.recovery?.kind !== "reconnect") this.reserve(room);
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
+
   attach(socket, ip) {
     this.connections.set(socket, {
       socket,
@@ -26,17 +138,21 @@ export class RoomManager {
     });
   }
   broadcast(room, message) {
-    for (const seat of room.seats) if (seat) send(seat.socket, message);
+    for (const seat of room.seats)
+      if (this.connected(seat)) send(seat.socket, message);
   }
   roomMessage(room) {
     return {
       v: 1,
       type: "room",
       code: room.code,
-      phase: room.game?.phase || "lobby",
+      phase: this.effectivePhase(room),
+      serverTime: this.now(),
+      reconnectDeadlineServerTime:
+        room.recovery?.kind === "reconnect" ? room.recovery.deadline : null,
       players: [0, 1].map((slot) => ({
         slot,
-        connected: !!room.seats[slot],
+        connected: this.connected(room.seats[slot]),
         ready: !!room.seats[slot]?.ready,
       })),
     };
@@ -45,21 +161,33 @@ export class RoomManager {
     if (!room.game) return;
     const state = room.game.getState();
     state.players.forEach((p, slot) => {
-      p.connected = !!room.seats[slot];
+      p.connected = this.connected(room.seats[slot]);
     });
+    if (room.recovery) {
+      const r = room.recovery;
+      state.pause = {
+        reason: r.kind === "server_busy" ? "server_busy" : "reconnect",
+        deadlineServerTime: r.deadline,
+        resumePhase: room.game.resumePhase || "playing",
+      };
+      if (r.kind === "countdown")
+        state.countdownRemainingMs = Math.max(0, r.deadline - this.now());
+    }
+    room.lastSnapshotAt = this.now();
     this.broadcast(room, {
       v: 1,
       type: "snapshot",
       matchId: room.game.matchId,
       tick: room.game.tick,
       serverTime: this.now(),
-      phase: room.game.phase,
+      phase: this.effectivePhase(room),
       state,
     });
   }
   flush(room, immediate = false) {
     const game = room.game;
     if (!game) return;
+    if (game.phase === "finished") room.recovery = null;
     const items = game.drainEvents();
     if (items.length)
       this.broadcast(room, {
@@ -120,13 +248,16 @@ export class RoomManager {
         message: text,
         requestId: message.requestId,
       });
+    if (connection.room)
+      return fail("INVALID_PHASE", "Leave your current room first.");
+    if (message.type === "resume")
+      return this.resumeSeat(connection, message, fail, respond);
     if (!this.attempt(connection.ip))
       return fail(
         "RATE_LIMITED",
         "Too many room requests. Try again in a minute.",
       );
-    if (connection.room)
-      return fail("INVALID_PHASE", "Leave your current room first.");
+
     let room;
     if (message.type === "create") {
       if (this.rooms.size >= this.maxRooms)
@@ -144,6 +275,8 @@ export class RoomManager {
         createdAt: this.now(),
         game: null,
         resultSent: false,
+        recovery: null,
+        stalls: [],
       };
       this.rooms.set(code, room);
     } else {
@@ -163,22 +296,12 @@ export class RoomManager {
     room.seats[slot] = seat;
     connection.room = room;
     connection.slot = slot;
-    respond({
-      v: 1,
-      type: "welcome",
-      requestId: message.requestId,
-      code: room.code,
-      playerId: seat.playerId,
-      slot,
-      token: seat.token,
-      matchId: null,
-      nextInputSeq: 1,
-    });
+    respond(this.welcome(connection, message.requestId, false));
     this.broadcast(room, this.roomMessage(room));
   }
   handle(socket, message) {
     const c = this.connections.get(socket);
-    if (!c) return;
+    if (!c || socket.readyState !== 1) return;
     if (message.type === "ping")
       return send(socket, {
         v: 1,
@@ -187,21 +310,14 @@ export class RoomManager {
         clientTime: message.clientTime,
         serverTime: this.now(),
       });
-    if (message.type === "create" || message.type === "join")
+    if (["create", "join", "resume"].includes(message.type))
       return this.request(c, message);
-    if (message.type === "resume")
-      return error(
-        socket,
-        "AUTH_FAILED",
-        "Unable to resume this session.",
-        message.requestId,
-      );
     const room = c.room;
     if (!room) return error(socket, "INVALID_PHASE", "Join a room first.");
     if (message.type === "leave") return this.leave(c, true);
-    if (message.type === "ready" && !room.game) {
+    if (message.type === "ready" && !room.game && !room.recovery) {
       room.seats[c.slot].ready = message.ready;
-      if (room.seats.every((seat) => seat?.ready)) {
+      if (room.seats.every((seat) => this.connected(seat) && seat.ready)) {
         room.game = new DuelGame({
           seed: randomBytes(4).readUInt32LE(),
           matchId: randomUUID(),
@@ -212,7 +328,11 @@ export class RoomManager {
       this.snapshot(room);
       return;
     }
-    if (message.type === "input" && room.game?.phase === "playing") {
+    if (
+      message.type === "input" &&
+      this.effectivePhase(room) === "playing" &&
+      room.game?.phase === "playing"
+    ) {
       room.game.applyInput(c.slot, message);
       return;
     }
@@ -225,14 +345,26 @@ export class RoomManager {
   leave(connection, voluntary = false) {
     const room = connection.room;
     if (!room) return;
-    if (room.game && LIVE.includes(room.game.phase)) {
+    if (room.game && room.game.phase !== "finished") {
       if (voluntary) {
         room.game.finish(1 - connection.slot, "forfeit");
         this.flush(room, true);
       } else {
-        this.interrupt(room, "Opponent disconnected. Match interrupted.");
+        room.seats[connection.slot].socket = null;
+        connection.room = null;
+        connection.slot = null;
+        this.reserve(room);
         return;
       }
+    }
+    if (!voluntary) {
+      room.seats[connection.slot].socket = null;
+      if (!room.game) room.seats[connection.slot].ready = false;
+      connection.room = null;
+      connection.slot = null;
+      if (!room.game) this.reserve(room);
+      else this.broadcast(room, this.roomMessage(room));
+      return;
     }
     room.seats[connection.slot] = null;
     connection.room = null;
@@ -250,14 +382,14 @@ export class RoomManager {
   interrupt(room, message, code = "SERVER_BUSY") {
     this.rooms.delete(room.code);
     for (const seat of room.seats) {
-      if (!seat) continue;
+      if (!seat?.socket) continue;
       const c = this.connections.get(seat.socket);
       if (c) {
         c.room = null;
         c.slot = null;
       }
-      error(seat.socket, code, message);
-      seat.socket.close(1012, "Match interrupted");
+      error(seat.socket, code, message, undefined, true);
+      seat.socket?.close(1012, "Match interrupted");
     }
   }
   advance(now = this.now()) {
@@ -267,10 +399,41 @@ export class RoomManager {
     if (elapsed > 500) {
       this.accumulator = 0;
       for (const room of this.rooms.values())
-        if (room.game && LIVE.includes(room.game.phase))
-          this.interrupt(room, "Server stalled. Match interrupted.");
+        if (room.game && room.game.phase !== "finished") {
+          room.stalls = room.stalls.filter((t) => now - t < 60000);
+          room.stalls.push(now);
+          if (room.stalls.length >= 3) {
+            this.interrupt(
+              room,
+              "Server repeatedly stalled. Match interrupted.",
+            );
+            continue;
+          }
+          if (room.recovery?.kind === "reconnect") continue;
+          this.freeze(room);
+          room.recovery = {
+            kind: "server_busy",
+            deadline: now + 1000,
+            healthySince: null,
+            graceDeadline: room.recovery?.graceDeadline ?? null,
+          };
+          this.broadcast(room, this.roomMessage(room));
+          this.snapshot(room);
+        }
       return;
     }
+    for (const room of this.rooms.values())
+      if (room.recovery?.kind === "server_busy") {
+        const r = room.recovery;
+        if (elapsed > 100) {
+          r.healthySince = null;
+          r.deadline = now + 1000;
+        } else {
+          r.healthySince ??= now;
+          r.deadline = r.healthySince + 1000;
+          if (now >= r.deadline) this.recoveryCountdown(room, r.graceDeadline);
+        }
+      }
     this.accumulator += elapsed;
     let ticks = 0;
     while (this.accumulator + 1e-8 >= 1000 / R.simulationHz && ticks < 5) {
@@ -287,9 +450,43 @@ export class RoomManager {
   maintenance(now) {
     for (const [ip, bucket] of this.ipAttempts)
       if (now - bucket.last > 60000) this.ipAttempts.delete(ip);
+    for (const [ip, bucket] of this.resumeAttempts)
+      if (now - bucket.last > 60000) this.resumeAttempts.delete(ip);
     for (const c of this.connections.values())
-      if (now - c.lastPong > 25000) c.socket.terminate();
+      if (now - c.lastPong > 25000) {
+        c.socket.terminate();
+        this.detach(c.socket);
+      }
     for (const room of this.rooms.values()) {
+      const r = room.recovery;
+      if (r?.kind === "reconnect" && now >= r.deadline) {
+        const connected = room.seats.map((s) => this.connected(s));
+        if (room.game) {
+          if (connected.filter(Boolean).length === 1) {
+            room.game.finish(connected[0] ? 0 : 1, "forfeit");
+            room.recovery = null;
+            this.flush(room, true);
+          } else {
+            this.interrupt(room, "Both players disconnected. Match abandoned.");
+            continue;
+          }
+        } else {
+          room.seats = room.seats.map((s) => (this.connected(s) ? s : null));
+          room.recovery = null;
+          if (!room.seats.some(Boolean)) {
+            this.rooms.delete(room.code);
+            continue;
+          }
+          this.broadcast(room, this.roomMessage(room));
+        }
+      } else if (r?.kind === "countdown" && now >= r.deadline) {
+        room.game.setPaused(false);
+        room.recovery = null;
+        this.broadcast(room, this.roomMessage(room));
+        this.snapshot(room);
+      }
+      if (room.recovery && now - (room.lastSnapshotAt ?? -Infinity) >= 50)
+        this.snapshot(room);
       const expired = !room.game
         ? now - room.createdAt > 600000
         : room.finishedAt !== undefined && now - room.finishedAt > 300000;
@@ -309,5 +506,6 @@ export class RoomManager {
     this.rooms.clear();
     this.connections.clear();
     this.ipAttempts.clear();
+    this.resumeAttempts.clear();
   }
 }
