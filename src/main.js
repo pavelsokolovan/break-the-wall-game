@@ -456,6 +456,24 @@ canvas.addEventListener("pointermove", (e) => {
   if (e.pointerType === "mouse" || canvas.hasPointerCapture(e.pointerId))
     pointer(e);
 });
+const dragArea = $("solo-drag-area");
+let dragPointer = null;
+dragArea.addEventListener("pointerdown", (e) => {
+  if (e.isPrimary === false) return;
+  dragPointer = e.pointerId;
+  dragArea.setPointerCapture(e.pointerId);
+  pointer(e);
+});
+dragArea.addEventListener("pointermove", (e) => {
+  if (dragPointer === e.pointerId) pointer(e);
+});
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+  dragArea.addEventListener(type, (e) => {
+    if (dragPointer !== e.pointerId) return;
+    dragPointer = null;
+    if (dragArea.hasPointerCapture(e.pointerId))
+      dragArea.releasePointerCapture(e.pointerId);
+  });
 let paddleTap;
 canvas.addEventListener("pointerdown", (e) => {
   audio();

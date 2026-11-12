@@ -1195,3 +1195,23 @@ main:has(#duel-panel:not([hidden])) {
 #duel-history-list li {
   margin-bottom: 12px;
 }
+
+/* Keep fingers below the Solo paddle while retaining full playfield height. */
+#solo-drag-area {
+  display: none;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  #solo-drag-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 52px;
+    touch-action: none;
+    user-select: none;
+    color: var(--muted);
+    font:
+      16px "VT323",
+      monospace;
+    border-bottom: 1px solid var(--border);
+  }
+}
