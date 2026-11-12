@@ -9,10 +9,11 @@ saves, controls, bonuses and pixel style; Solo requires no multiplayer backend.
 Completed locally: [Stage 1](ONLINE_DUEL_STAGE_01_SPEC.md),
 [Stage 2](ONLINE_DUEL_STAGE_02_SPEC.md), [Stage 3](ONLINE_DUEL_STAGE_03_SPEC.md),
 [Stage 4](ONLINE_DUEL_STAGE_04_SPEC.md), [Stage 5](ONLINE_DUEL_STAGE_05_SPEC.md),
-[Stage 6](ONLINE_DUEL_STAGE_06_SPEC.md), and [Stage 7](ONLINE_DUEL_STAGE_07_SPEC.md).
-Milestones A–B are playable locally, including walls, full bonuses, hazards and weapons,
-with connection recovery and smooth rendering implemented.
-Next: Stage 8, complete session experience.
+[Stage 6](ONLINE_DUEL_STAGE_06_SPEC.md), [Stage 7](ONLINE_DUEL_STAGE_07_SPEC.md),
+and [Stage 8](ONLINE_DUEL_STAGE_08_SPEC.md).
+Milestones A–C are playable locally, including full gameplay, recovery, smooth rendering,
+invitations, pause consent, rematches and separate Duel history.
+Next: Stage 9, free hosting and release configuration.
 Hosted multiplayer is not deployed yet.
 
 | Stage                                        | Description                                                                                                                                                                   | Completion checkpoint                                                                 |

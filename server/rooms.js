@@ -27,6 +27,7 @@ export class RoomManager {
     if (room.recovery?.kind === "reconnect") return "reconnecting";
     if (room.recovery?.kind === "countdown") return "countdown";
     if (room.recovery?.kind === "server_busy") return "paused";
+    if (room.manual) return "paused";
     return room.game?.phase || "lobby";
   }
   welcome(connection, requestId, resumed) {
@@ -147,6 +148,7 @@ export class RoomManager {
       type: "room",
       code: room.code,
       phase: this.effectivePhase(room),
+      pauseUsed: room.pauseUsed || [false, false],
       serverTime: this.now(),
       reconnectDeadlineServerTime:
         room.recovery?.kind === "reconnect" ? room.recovery.deadline : null,
@@ -154,6 +156,7 @@ export class RoomManager {
         slot,
         connected: this.connected(room.seats[slot]),
         ready: !!room.seats[slot]?.ready,
+        rematchReady: !!room.seats[slot]?.rematchReady,
       })),
     };
   }
@@ -163,6 +166,13 @@ export class RoomManager {
     state.players.forEach((p, slot) => {
       p.connected = this.connected(room.seats[slot]);
     });
+    if (room.manual && !room.recovery)
+      state.pause = {
+        reason: room.manual.reason,
+        deadlineServerTime: room.manual.deadline,
+        resumePhase: room.game.resumePhase,
+        consents: [...room.manual.consents],
+      };
     if (room.recovery) {
       const r = room.recovery;
       state.pause = {
@@ -187,8 +197,15 @@ export class RoomManager {
   flush(room, immediate = false) {
     const game = room.game;
     if (!game) return;
-    if (game.phase === "finished") room.recovery = null;
+    if (game.phase === "finished") {
+      room.recovery = null;
+      room.manual = null;
+    }
     const items = game.drainEvents();
+    if (items.some((e) => ["goal", "rally_replay"].includes(e.type))) {
+      room.pauseUsed = [false, false];
+      this.broadcast(room, this.roomMessage(room));
+    }
     if (items.length)
       this.broadcast(room, {
         v: 1,
@@ -277,6 +294,8 @@ export class RoomManager {
         resultSent: false,
         recovery: null,
         stalls: [],
+        manual: null,
+        pauseUsed: [false, false],
       };
       this.rooms.set(code, room);
     } else {
@@ -299,6 +318,97 @@ export class RoomManager {
     respond(this.welcome(connection, message.requestId, false));
     this.broadcast(room, this.roomMessage(room));
   }
+  manualPause(c, message) {
+    const room = c.room,
+      game = room.game;
+    if (!game || game.phase === "finished" || room.recovery)
+      return error(
+        c.socket,
+        "INVALID_PHASE",
+        "Pause is unavailable during recovery or after a match.",
+      );
+    if (!message.requested) return this.consent(c);
+    room.pauseUsed ||= [false, false];
+    if (room.pauseUsed[c.slot]) {
+      if (message.reason === "background") {
+        game.pendingActions[c.slot] = { release: false, fire: false };
+      }
+      return error(
+        c.socket,
+        "INVALID_PHASE",
+        "Your pause was used this rally. Play continues unless already paused.",
+      );
+    }
+    room.pauseUsed[c.slot] = true;
+    this.freeze(room);
+    room.manual ||= {
+      deadline: this.now() + 30000,
+      reason: message.reason || "manual",
+      consents: [false, false],
+    };
+    room.manual.consents[c.slot] = false;
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
+  consent(c) {
+    const room = c.room;
+    if (!room.manual)
+      return error(
+        c.socket,
+        "INVALID_PHASE",
+        "There is no manual pause to resume.",
+      );
+    room.manual.consents[c.slot] = true;
+    if (room.manual.consents.every(Boolean)) this.endManual(room);
+    else this.snapshot(room);
+  }
+  endManual(room) {
+    room.manual = null;
+    if (!room.recovery) room.game.setPaused(false);
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
+  rematch(c, ready) {
+    const room = c.room;
+    if (room.game?.phase !== "finished")
+      return error(
+        c.socket,
+        "INVALID_PHASE",
+        "Finish the current match first.",
+      );
+    room.seats[c.slot].rematchReady = ready;
+    if (!room.seats.every((s) => this.connected(s) && s.rematchReady)) {
+      this.broadcast(room, this.roomMessage(room));
+      return;
+    }
+    room.seats.reverse();
+    room.requiresMatchId = true;
+    room.game = new DuelGame({
+      seed: randomBytes(4).readUInt32LE(),
+      matchId: randomUUID(),
+    });
+    room.resultSent = false;
+    delete room.finishedAt;
+    room.manual = null;
+    room.recovery = null;
+    room.pauseUsed = [false, false];
+    room.stalls = [];
+    room.game.start();
+    room.seats.forEach((seat, slot) => {
+      seat.token = randomBytes(16).toString("hex");
+      seat.rematchReady = false;
+      seat.ready = false;
+      const connection = this.connections.get(seat.socket);
+      connection.slot = slot;
+      connection.cache.clear();
+      send(seat.socket, {
+        ...this.welcome(connection, `rematch:${room.game.matchId}`, false),
+        rematch: true,
+      });
+    });
+    this.broadcast(room, this.roomMessage(room));
+    this.snapshot(room);
+  }
   handle(socket, message) {
     const c = this.connections.get(socket);
     if (!c || socket.readyState !== 1) return;
@@ -315,6 +425,9 @@ export class RoomManager {
     const room = c.room;
     if (!room) return error(socket, "INVALID_PHASE", "Join a room first.");
     if (message.type === "leave") return this.leave(c, true);
+    if (message.type === "pause") return this.manualPause(c, message);
+    if (message.type === "resume_play") return this.consent(c);
+    if (message.type === "rematch") return this.rematch(c, message.ready);
     if (message.type === "ready" && !room.game && !room.recovery) {
       room.seats[c.slot].ready = message.ready;
       if (room.seats.every((seat) => this.connected(seat) && seat.ready)) {
@@ -333,6 +446,11 @@ export class RoomManager {
       this.effectivePhase(room) === "playing" &&
       room.game?.phase === "playing"
     ) {
+      if (
+        (room.requiresMatchId || message.matchId !== undefined) &&
+        message.matchId !== room.game.matchId
+      )
+        return;
       room.game.applyInput(c.slot, message);
       return;
     }
@@ -345,6 +463,7 @@ export class RoomManager {
   leave(connection, voluntary = false) {
     const room = connection.room;
     if (!room) return;
+    for (const seat of room.seats) if (seat) seat.rematchReady = false;
     if (room.game && room.game.phase !== "finished") {
       if (voluntary) {
         room.game.finish(1 - connection.slot, "forfeit");
@@ -458,6 +577,7 @@ export class RoomManager {
         this.detach(c.socket);
       }
     for (const room of this.rooms.values()) {
+      if (room.manual && now >= room.manual.deadline) this.endManual(room);
       const r = room.recovery;
       if (r?.kind === "reconnect" && now >= r.deadline) {
         const connected = room.seats.map((s) => this.connected(s));
@@ -480,7 +600,7 @@ export class RoomManager {
           this.broadcast(room, this.roomMessage(room));
         }
       } else if (r?.kind === "countdown" && now >= r.deadline) {
-        room.game.setPaused(false);
+        if (!room.manual) room.game.setPaused(false);
         room.recovery = null;
         this.broadcast(room, this.roomMessage(room));
         this.snapshot(room);

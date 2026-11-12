@@ -119,7 +119,7 @@ try {
         page,
       );
       await writeFile(
-        "/tmp/brickfall-stage7-failure.png",
+        "/tmp/brickfall-stage8-failure.png",
         Buffer.from(screenshot.data, "base64"),
       );
     } catch {
@@ -263,7 +263,7 @@ try {
   await command("Page.bringToFront", {}, b);
   const waiting = await command("Page.captureScreenshot", { format: "png" }, b);
   await writeFile(
-    "/tmp/brickfall-stage7-reconnecting.png",
+    "/tmp/brickfall-stage8-reconnecting.png",
     Buffer.from(waiting.data, "base64"),
   );
   await wait(150);
@@ -289,9 +289,36 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage7-resuming.png",
+    "/tmp/brickfall-stage8-resuming.png",
     Buffer.from(resuming.data, "base64"),
   );
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('First to five')",
+  );
+  // Both resume consents are required; opening a panel spends the same rally budget.
+  await evaluate(a, "document.getElementById('duel-pause').click()");
+  await until(
+    b,
+    "document.getElementById('duel-status').textContent.includes('Paused')",
+  );
+  const pauseTick = recoveryRoom.game.tick;
+  await evaluate(a, "document.getElementById('duel-pause').click()");
+  await wait(100);
+  assert.equal(recoveryRoom.game.tick, pauseTick);
+  await evaluate(b, "document.getElementById('duel-pause').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('First to five')",
+  );
+  await evaluate(b, "document.getElementById('duel-legend').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Paused')",
+  );
+  assert(await evaluate(b, "!document.getElementById('duel-info').hidden"));
+  await evaluate(b, "document.getElementById('duel-info-close').click()");
+  await evaluate(a, "document.getElementById('duel-pause').click()");
   await until(
     a,
     "document.getElementById('duel-status').textContent.includes('First to five')",
@@ -491,7 +518,7 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage7-portrait.png",
+    "/tmp/brickfall-stage8-portrait.png",
     Buffer.from(portrait.data, "base64"),
   );
   await command(
@@ -513,8 +540,37 @@ try {
     a,
   );
   await writeFile(
-    "/tmp/brickfall-stage7-landscape.png",
+    "/tmp/brickfall-stage8-landscape.png",
     Buffer.from(landscape.data, "base64"),
+  );
+  const previousMatch = scenarioGame.matchId;
+  scenarioGame.finish(1, "five_goals");
+  app.manager.flush(recoveryRoom, true);
+  await until(
+    b,
+    "document.getElementById('duel-status').textContent.includes('YOU WIN')",
+  );
+  for (const p of [a, b]) {
+    await evaluate(p, "document.getElementById('duel-history').click()");
+    assert(
+      await evaluate(
+        p,
+        "document.getElementById('duel-history-list').children.length === 1",
+      ),
+    );
+    await evaluate(p, "document.getElementById('duel-info-close').click()");
+    await evaluate(p, "document.getElementById('duel-rematch').click()");
+  }
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Get ready')",
+  );
+  assert.notEqual(recoveryRoom.game.matchId, previousMatch);
+  assert.equal(recoveryRoom.seats[1].playerId, recoveryPlayer);
+  assert.deepEqual(recoveryRoom.game.state.goals, [0, 0]);
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('First to five')",
   );
   await evaluate(
     a,
@@ -538,10 +594,10 @@ try {
   }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; same-seat reconnect/countdown; portrait and landscape fit; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/multiball/bazooka; real F/Space/button actions; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
   );
   console.log(
-    "Screenshots: /tmp/brickfall-stage7-portrait.png, /tmp/brickfall-stage7-landscape.png",
+    "Screenshots: /tmp/brickfall-stage8-portrait.png, /tmp/brickfall-stage8-landscape.png",
   );
 } finally {
   cdp?.close();

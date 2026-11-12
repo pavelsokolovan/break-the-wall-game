@@ -1,3 +1,9 @@
+import {
+  DuelHistory,
+  invitationCode,
+  invitationUrl,
+  shareInvitation,
+} from "./duel-session.js";
 import { DuelSync, ServerClock } from "./duel-sync.js";
 import { OnlineClient, multiplayerUrl } from "./online-client.js";
 import { drawDuel } from "./duel-view.js";
@@ -33,8 +39,24 @@ export function mountMultiplayer({
     tap = null,
     lastEventId = 0,
     eventMatchId = null,
-    viewSlot = null;
+    viewSlot = null,
+    panel = null,
+    panelFocus = null,
+    resolveLeave = null,
+    leaving = false;
   const keys = new Set();
+  let localStorage;
+  try {
+    localStorage = win.localStorage;
+  } catch {
+    /* Storage is optional. */
+  }
+  const history = new DuelHistory(localStorage);
+  const invited = invitationCode(win.location);
+  if (invited) {
+    $("duel-code").value = invited;
+    $("online-mode").textContent = `ONLINE DUEL · JOIN ${invited}`;
+  }
   const clock = new ServerClock(),
     sync = new DuelSync({ clock });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -49,6 +71,30 @@ export function mountMultiplayer({
     $("duel-ready").disabled = !room?.players.every((p) => p.connected);
     $("duel-leave").hidden = !room;
     $("duel-connect").hidden = !!room;
+    const connected = client.socket?.readyState === 1 && !client.recovering;
+    $("duel-share").hidden = !room;
+    $("duel-pause").hidden = !snapshot || !!result;
+    $("duel-pause").textContent =
+      snapshot?.phase === "paused" &&
+      ["manual", "panel", "background"].includes(snapshot.state.pause?.reason)
+        ? "RESUME"
+        : "PAUSE";
+    $("duel-pause").disabled =
+      !connected ||
+      !!leaving ||
+      !!panel ||
+      !["playing", "countdown", "goal_countdown", "paused"].includes(
+        snapshot?.phase,
+      ) ||
+      (!!room?.pauseUsed?.[client.slot] && snapshot?.phase !== "paused") ||
+      (!!snapshot?.state.pause &&
+        ["reconnect", "server_busy"].includes(snapshot.state.pause.reason));
+    $("duel-rematch").hidden = !result;
+    $("duel-rematch").disabled =
+      !connected || leaving || !room?.players.every((p) => p.connected);
+    $("duel-rematch").textContent = room?.players[client.slot]?.rematchReady
+      ? "CANCEL REMATCH"
+      : "REMATCH";
   }
   const client = clientFactory({
     now,
@@ -78,6 +124,14 @@ export function mountMultiplayer({
     },
     onMessage(message) {
       if (message.type === "welcome") {
+        if (message.rematch) {
+          snapshot = null;
+          result = null;
+          eventMatchId = null;
+          lastEventId = 0;
+          closePanel(false);
+          status("Rematch · sides swapped. Get ready…");
+        }
         viewSlot = message.slot;
         sync.reset();
         inactive();
@@ -142,6 +196,7 @@ export function mountMultiplayer({
           action = "none";
         }
         if (!result) showSnapshotStatus(message);
+        controls();
       }
       if (message.type === "events") {
         if (eventMatchId !== message.matchId) {
@@ -168,18 +223,23 @@ export function mountMultiplayer({
           }
       }
       if (message.type === "result") {
+        history.save(message, client.slot ?? viewSlot);
         if (result?.matchId === message.matchId) return;
         result = message;
         status(
-          `${message.winner === null ? "DRAW" : message.winner === client.slot ? "YOU WIN" : "OPPONENT WINS"} · ${message.goals[client.slot]}–${message.goals[1 - client.slot]} · Leave to create a new match`,
+          `${message.winner === null ? "DRAW" : message.winner === client.slot ? "YOU WIN" : "OPPONENT WINS"} · ${message.goals[client.slot]}–${message.goals[1 - client.slot]} · ${message.reason.replaceAll("_", " ")} · Rematch or leave room`,
         );
         $("duel-action").disabled = true;
+        controls();
+        resolveLeave?.();
       }
       if (message.type === "error" && !result) status(message.message);
     },
   });
   function reset() {
     sync.reset();
+    closePanel(false);
+    $("duel-invite-fallback").hidden = true;
     room = null;
     snapshot = null;
     result = null;
@@ -197,10 +257,34 @@ export function mountMultiplayer({
     $("duel-action").hidden = true;
     controls();
   }
-  function leave() {
+  async function leave() {
+    if (leaving) return;
     generation++;
-    client.send({ type: "leave" });
+    leaving = true;
+    controls();
+    inactive();
+    const live =
+      snapshot &&
+      !result &&
+      client.socket?.readyState === 1 &&
+      !client.recovering;
+    if (live) {
+      // Wait briefly for the server's forfeit result before discarding identity.
+      await new Promise((resolve) => {
+        const timer = win.setTimeout(() => {
+          resolveLeave = null;
+          resolve();
+        }, 800);
+        resolveLeave = () => {
+          win.clearTimeout(timer);
+          resolveLeave = null;
+          resolve();
+        };
+        client.send({ type: "leave" });
+      });
+    } else client.send({ type: "leave" });
     client.disconnect();
+    leaving = false;
     pending = false;
     reset();
   }
@@ -223,11 +307,13 @@ export function mountMultiplayer({
     $("online-mode").setAttribute("aria-pressed", String(active));
     if (active) {
       const recovering =
-        url && client.hasSession(url) && client.resumeSaved(url);
+        !leaving && url && client.hasSession(url) && client.resumeSaved(url);
       if (!recovering)
         status(
           url
-            ? "Create a room or enter a friend’s code."
+            ? invited
+              ? `Invitation to ${invited}. Press Join Room to enter.`
+              : "Create a room or enter a friend’s code."
             : "Online Duel is unavailable here. A multiplayer server must be configured. Solo is ready to play.",
         );
       if (raf === null) {
@@ -242,7 +328,7 @@ export function mountMultiplayer({
     }
   }
   async function request(type) {
-    if (pending || room) return;
+    if (pending || room || leaving || client.recovering) return;
     const code =
       type === "join" ? normalizeRoomCode($("duel-code").value) : null;
     if (type === "join" && !code) {
@@ -283,18 +369,21 @@ export function mountMultiplayer({
     onUserGesture();
     client.send({ type: "ready", ready: !room?.players[client.slot]?.ready });
   };
-  $("duel-leave").onclick = () => {
+  $("duel-leave").onclick = async () => {
     if (
       snapshot &&
       !result &&
       !win.confirm("Leave this match? Your opponent wins by forfeit.")
     )
       return;
-    leave();
+    await leave();
     status("Create a room or enter a friend’s code.");
   };
   function queueAction(type) {
     if (
+      !leaving &&
+      !panel &&
+      !doc.hidden &&
       !client.recovering &&
       client.socket?.readyState === 1 &&
       snapshot?.phase === "playing"
@@ -316,6 +405,9 @@ export function mountMultiplayer({
   }
   canvas.addEventListener("pointerdown", (e) => {
     if (
+      leaving ||
+      panel ||
+      doc.hidden ||
       e.isPrimary === false ||
       client.recovering ||
       client.socket?.readyState !== 1 ||
@@ -344,6 +436,9 @@ export function mountMultiplayer({
   });
   canvas.addEventListener("pointermove", (e) => {
     if (
+      !leaving &&
+      !panel &&
+      !doc.hidden &&
       snapshot?.phase === "playing" &&
       (e.pointerType === "mouse" || tap?.id === e.pointerId)
     )
@@ -367,6 +462,19 @@ export function mountMultiplayer({
   });
   win.addEventListener("keydown", (e) => {
     if (
+      active &&
+      !["INPUT", "TEXTAREA"].includes(e.target.tagName) &&
+      ["p", "escape"].includes(e.key.toLowerCase())
+    ) {
+      e.preventDefault();
+      if (panel) closePanel();
+      else if (!e.repeat) $("duel-pause").click();
+      return;
+    }
+    if (
+      leaving ||
+      panel ||
+      doc.hidden ||
       !active ||
       snapshot?.phase !== "playing" ||
       ["INPUT", "TEXTAREA", "BUTTON"].includes(e.target.tagName)
@@ -389,7 +497,11 @@ export function mountMultiplayer({
   }
   win.addEventListener("blur", inactive);
   doc.addEventListener("visibilitychange", () => {
-    if (doc.hidden) inactive();
+    if (!active) return;
+    inactive();
+    if (doc.hidden) requestPause("background");
+    else if (!panel && snapshot?.state.pause)
+      client.send({ type: "resume_play" });
   });
   function showSnapshotStatus(s) {
     const pause = s.state.pause;
@@ -401,7 +513,9 @@ export function mountMultiplayer({
       status(
         pause.reason === "server_busy"
           ? "Server busy. Match frozen while it recovers…"
-          : `Waiting for reconnect… ${left}s remaining`,
+          : ["manual", "panel", "background"].includes(pause.reason)
+            ? `Paused · ${left}s remaining · ${pause.consents?.[client.slot] ? "Waiting for opponent consent" : "Choose Resume when ready"}`
+            : `Waiting for reconnect… ${left}s remaining`,
       );
     } else if (pause && s.phase === "countdown")
       status(
@@ -449,6 +563,7 @@ export function mountMultiplayer({
       canvas.style.width = `${Math.floor(width)}px`;
       canvas.style.height = `${Math.floor((width * R.height) / R.width)}px`;
       const stale = !result && now() - receivedAt > 250;
+      if (panel || doc.hidden || leaving) inactive();
       if (stale) {
         inactive();
         sync.desired = null;
@@ -462,6 +577,9 @@ export function mountMultiplayer({
       )
         status("Waiting for server… play is frozen on this screen.");
       if (
+        !leaving &&
+        !panel &&
+        !doc.hidden &&
         !stale &&
         snapshot.phase === "playing" &&
         !client.recovering &&
@@ -506,6 +624,93 @@ export function mountMultiplayer({
     }
     raf = win.requestAnimationFrame(frame);
   }
+  function requestPause(reason = "manual") {
+    inactive();
+    sync.desired = null;
+    if (
+      snapshot &&
+      !result &&
+      !client.recovering &&
+      client.socket?.readyState === 1
+    )
+      client.send({ type: "pause", requested: true, reason });
+  }
+  function closePanel(consent = true) {
+    if (!panel) return;
+    panel = null;
+    $("duel-info").hidden = true;
+    if (consent && !doc.hidden && snapshot && !result)
+      client.send({ type: "resume_play" });
+    panelFocus?.focus();
+    panelFocus = null;
+    inactive();
+    controls();
+  }
+  function openPanel(kind) {
+    if (panel) return;
+    panelFocus = doc.activeElement;
+    panel = kind;
+    requestPause("panel");
+    $("duel-info-title").textContent =
+      kind === "history" ? "DUEL HISTORY" : "DUEL LEGEND";
+    const body = $("duel-info-body");
+    body.replaceChildren();
+    if (kind === "history") {
+      const records = history.read();
+      const list = doc.createElement("ol");
+      list.id = "duel-history-list";
+      if (!records.length)
+        body.textContent =
+          "No completed duels yet. Only server-confirmed results are saved.";
+      for (const r of records) {
+        const item = doc.createElement("li");
+        item.textContent = `${r.outcome.toUpperCase()} · ${r.goalsFor}–${r.goalsAgainst} · ${r.pointsFor} / ${r.pointsAgainst} points · ${r.reason.replaceAll("_", " ")} · ${Math.round(r.durationMs / 1000)}s · wave ${r.waveCount} · ${new Date(r.date).toLocaleString()}`;
+        list.append(item);
+      }
+      body.append(list);
+    } else
+      body.textContent =
+        "First to five goals; brick points do not break ties. Matches end after 15 minutes of active play. Move with drag, mouse, arrows or A/D. Tap your paddle or Space to release held balls and fire; F fires only. Sticky holds for three seconds; bazooka stores up to fifteen shots; multiball shares a three-ball cap. Gems give points; Wide and Slow help returns; Repair fixes damage. Shield and Vest stop hazards, never goals. Your drops travel toward you. Pause, panels and background share one 30-second pause per player per rally. Both players must consent to resume, or the timer expires. Panels do not stop play after the pause budget expires.";
+    $("duel-info").hidden = false;
+    $("duel-info-close").focus();
+    controls();
+  }
+  $("duel-info-close").onclick = () => closePanel();
+  $("duel-info").addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      $("duel-info-close").focus();
+    }
+  });
+  $("duel-legend").onclick = () => openPanel("legend");
+  $("duel-history").onclick = () => openPanel("history");
+  $("duel-pause").onclick = () => {
+    if (
+      snapshot?.phase === "paused" &&
+      ["manual", "panel", "background"].includes(snapshot.state.pause?.reason)
+    )
+      client.send({ type: "resume_play" });
+    else requestPause();
+  };
+  $("duel-rematch").onclick = () => {
+    inactive();
+    client.send({
+      type: "rematch",
+      ready: !room?.players[client.slot]?.rematchReady,
+    });
+  };
+  $("duel-share").onclick = async () => {
+    if (!room) return;
+    const link = invitationUrl(win.location, room.code);
+    const shared = await shareInvitation(win.navigator, link);
+    if (shared === "manual") {
+      $("duel-invite-link").value = link;
+      $("duel-invite-fallback").hidden = false;
+      $("duel-invite-link").focus();
+      $("duel-invite-link").select();
+      if (!result) status("Copy the invitation link below.");
+    } else if (shared === "copied" && !result) status("Invitation copied.");
+  };
   controls();
-  return { client, switchMode, leave };
+  return { client, switchMode, leave, history };
 }

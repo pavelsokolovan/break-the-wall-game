@@ -1161,3 +1161,37 @@ main:has(#duel-panel:not([hidden])) {
     margin-bottom: 2px;
   }
 }
+
+.duel-room-actions {
+  flex-wrap: wrap;
+}
+.duel-info-content {
+  background: #151522;
+  border: 1px solid var(--border);
+  padding: 20px;
+  max-width: 680px;
+  width: 95%;
+  max-height: 85vh;
+  overflow: auto;
+}
+#duel-info {
+  z-index: 20;
+  align-items: center;
+  justify-content: center;
+}
+#duel-info-body {
+  font-size: 22px;
+  line-height: 1.35;
+}
+#duel-invite-link {
+  width: 95%;
+  color: var(--lime);
+  background: #151522;
+  padding: 8px;
+}
+#duel-history-list {
+  padding-left: 24px;
+}
+#duel-history-list li {
+  margin-bottom: 12px;
+}

@@ -164,9 +164,16 @@ const stateSchema = object({
   activeDurationMs: nonnegative,
   pause: nullable(
     object({
-      reason: enumeration("manual", "background", "reconnect", "server_busy"),
+      reason: enumeration(
+        "manual",
+        "background",
+        "panel",
+        "reconnect",
+        "server_busy",
+      ),
       deadlineServerTime: nonnegative,
       resumePhase: enumeration("countdown", "playing", "goal_countdown"),
+      consents: optional(array(bool, 2)),
     }),
   ),
   players: array(player, 2),
@@ -182,11 +189,15 @@ const clientSchemas = {
   resume: { requestId, code, token },
   ready: { ready: bool },
   input: {
+    matchId: optional(matchId),
     seq: positive,
     x: number(0, 1),
     action: enumeration("none", "release_fire", "fire"),
   },
-  pause: { requested: bool },
+  pause: {
+    requested: bool,
+    reason: optional(enumeration("manual", "background", "panel")),
+  },
   resume_play: {},
   rematch: { ready: bool },
   leave: {},
@@ -276,13 +287,23 @@ const serverSchemas = {
     matchId: nullable(matchId),
     nextInputSeq: positive,
     resumed: optional(bool),
+    rematch: optional(bool),
   },
   room: {
     code,
     serverTime: optional(nonnegative),
     reconnectDeadlineServerTime: optional(nullable(nonnegative)),
     phase: roomPhase,
-    players: array(object({ slot, connected: bool, ready: bool }), 2),
+    pauseUsed: optional(array(bool, 2)),
+    players: array(
+      object({
+        slot,
+        connected: bool,
+        ready: bool,
+        rematchReady: optional(bool),
+      }),
+      2,
+    ),
   },
   snapshot: {
     matchId,

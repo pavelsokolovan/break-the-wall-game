@@ -106,9 +106,26 @@
             </p>
           </form>
           <p id="duel-slots"></p>
+          <label id="duel-invite-fallback" hidden
+            >Copy this invitation
+            <input
+              id="duel-invite-link"
+              readonly
+              aria-label="Invitation link"
+            />
+          </label>
           <div class="duel-room-actions">
             <button id="duel-ready" type="button" hidden>READY</button>
             <button id="duel-leave" type="button" hidden>LEAVE ROOM</button>
+            <button id="duel-share" type="button" hidden>INVITE</button>
+            <button id="duel-pause" type="button" hidden>PAUSE</button>
+            <button id="duel-rematch" type="button" hidden>REMATCH</button>
+            <button id="duel-legend" type="button" aria-haspopup="dialog">
+              LEGEND
+            </button>
+            <button id="duel-history" type="button" aria-haspopup="dialog">
+              DUEL HISTORY
+            </button>
           </div>
           <div id="duel-hud" class="duel-hud" hidden>
             <strong id="duel-goals"></strong><span id="duel-points"></span>
@@ -125,6 +142,20 @@
           <button id="duel-action" type="button" hidden>RELEASE / FIRE</button>
         </section>
       </main>
+    </div>
+    <div
+      id="duel-info"
+      class="info-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="duel-info-title"
+      hidden
+    >
+      <section class="duel-info-content">
+        <h2 id="duel-info-title"></h2>
+        <button id="duel-info-close" type="button">CLOSE</button>
+        <div id="duel-info-body"></div>
+      </section>
     </div>
     <div
       id="info-panel"

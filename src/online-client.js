@@ -186,8 +186,11 @@ export class OnlineClient {
           Number.isFinite(message.serverTime)
         )
           this.clock.observe(message.serverTime, this.now());
+        if (message.type === "snapshot") this.matchId = message.matchId;
         if (message.type === "welcome") {
-          const same = this.session?.playerId === message.playerId;
+          this.matchId = message.matchId;
+          const same =
+            !message.rematch && this.session?.playerId === message.playerId;
           this.slot = message.slot;
           this.nextSeq = same
             ? Math.max(this.nextSeq, this.session.nextSeq, message.nextInputSeq)
@@ -289,7 +292,16 @@ export class OnlineClient {
       return false;
     if (this.now() - this.lastInputAt < 1000 / 30) return false;
     const seq = this.nextSeq;
-    if (!this.send({ type: "input", seq, x, action })) return false;
+    if (
+      !this.send({
+        type: "input",
+        ...(this.matchId ? { matchId: this.matchId } : {}),
+        seq,
+        x,
+        action,
+      })
+    )
+      return false;
     this.nextSeq++;
     this.lastInputAt = this.now();
     if (this.session) {
@@ -413,6 +425,7 @@ export class OnlineClient {
     this.session = null;
     this.persist();
     this.slot = null;
+    this.matchId = null;
     this.state = "idle";
     this.clock.reset();
     this.onStatus(message);

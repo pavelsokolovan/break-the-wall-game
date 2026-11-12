@@ -66,8 +66,11 @@ function snapshot(phase = "playing") {
     state: g.getState(),
   };
 }
-function fixture(t, { url = "ws://localhost:3001/ws" } = {}) {
-  const window = new Window({ url: "http://localhost:5173/" }),
+function fixture(
+  t,
+  { url = "ws://localhost:3001/ws", href = "http://localhost:5173/" } = {},
+) {
+  const window = new Window({ url: href }),
     doc = window.document;
   doc.write(
     readFileSync(new URL("../index.html", import.meta.url), "utf8").replace(
@@ -775,4 +778,145 @@ test("recovery countdown shows the frozen deadline, disables actions and dedupli
   assert.equal(socket.sent.length, count);
   socket.receive(events);
   assert.deepEqual(f.sounds, ["paddle"]);
+});
+
+test("duel panels share pause budget, block inputs and close with only local consent", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  socket.receive(snapshot());
+  f.$("duel-legend").click();
+  assert(!f.$("duel-info").hidden);
+  assert.equal(socket.sent.at(-1).reason, "panel");
+  const count = socket.sent.filter((m) => m.type === "input").length;
+  f.$("duel-action").click();
+  f.frame();
+  assert.equal(socket.sent.filter((m) => m.type === "input").length, count);
+  const s = snapshot("paused");
+  s.state.pause = {
+    reason: "panel",
+    deadlineServerTime: 33000,
+    resumePhase: "playing",
+    consents: [false, false],
+  };
+  socket.receive(s);
+  f.$("duel-info-close").click();
+  assert.equal(socket.sent.at(-1).type, "resume_play");
+  assert.equal(f.$("duel-pause").textContent, "RESUME");
+  assert.match(f.$("duel-status").textContent, /Paused/);
+  f.$("duel-pause").click();
+  assert.equal(socket.sent.at(-1).type, "resume_play");
+});
+test("background requests shared pause and foreground supplies consent without movement", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  socket.receive(snapshot());
+  Object.defineProperty(f.doc, "hidden", { value: true, configurable: true });
+  f.doc.dispatchEvent(new f.window.Event("visibilitychange"));
+  assert.equal(socket.sent.at(-1).reason, "background");
+  f.frame();
+  assert.equal(socket.sent.at(-1).type, "pause");
+  const s = snapshot("paused");
+  s.state.pause = {
+    reason: "background",
+    deadlineServerTime: 33000,
+    resumePhase: "playing",
+    consents: [false, false],
+  };
+  socket.receive(s);
+  Object.defineProperty(f.doc, "hidden", { value: false, configurable: true });
+  f.doc.dispatchEvent(new f.window.Event("visibilitychange"));
+  assert.equal(socket.sent.at(-1).type, "resume_play");
+});
+test("result saves once before rematch swaps view and resets sequence; Solo saves survive", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  socket.receive(snapshot());
+  f.window.localStorage.setItem("brickfall-blitz:v1", "keep");
+  const r = {
+    type: "result",
+    matchId: "m",
+    winner: 0,
+    reason: "forfeit",
+    goals: [1, 0],
+    points: [20, 10],
+    durationMs: 1000,
+    waveCount: 1,
+  };
+  socket.receive(r);
+  socket.receive(r);
+  assert.equal(f.ui.history.read().length, 1);
+  f.$("duel-rematch").click();
+  assert.deepEqual(socket.sent.at(-1), { v: 1, type: "rematch", ready: true });
+  f.ui.client.nextSeq = 90;
+  socket.receive({
+    ...welcome(1),
+    requestId: "rematch:new",
+    matchId: "new",
+    token: "rotated",
+    rematch: true,
+  });
+  const s = snapshot("countdown");
+  s.matchId = "new";
+  s.tick = 0;
+  socket.receive(s);
+  assert.equal(f.ui.client.nextSeq, 1);
+  assert.equal(f.ui.client.slot, 1);
+  assert(f.$("duel-rematch").hidden);
+  assert.match(f.$("duel-status").textContent, /Get ready/);
+  f.$("duel-history").click();
+  assert.match(f.$("duel-info-body").textContent, /WIN.*1–0/);
+  assert.equal(f.window.localStorage.getItem("brickfall-blitz:v1"), "keep");
+});
+test("connected voluntary leave waits for authoritative forfeit history before clearing identity", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  socket.receive(snapshot());
+  const leaving = f.ui.leave();
+  assert.equal(socket.sent.at(-1).type, "leave");
+  socket.receive({
+    type: "result",
+    matchId: "m",
+    winner: 1,
+    reason: "forfeit",
+    goals: [0, 0],
+    points: [0, 0],
+    durationMs: 1000,
+    waveCount: 1,
+  });
+  await leaving;
+  assert.equal(f.ui.client.session, null);
+  assert.equal(f.ui.history.read()[0].outcome, "loss");
+  assert(f.$("duel-game").hidden);
+});
+
+test("invitation stays in Solo until explicit entry/join; sharing has a selectable fallback", async (t) => {
+  const f = fixture(t, { href: "http://localhost:5173/?duel=abc234" });
+  assert.equal(f.sockets.length, 0);
+  assert(!f.$("solo-panel").hidden);
+  assert.equal(f.$("duel-code").value, "ABC234");
+  f.$("online-mode").click();
+  assert.equal(f.sockets.length, 0);
+  assert.match(f.$("duel-status").textContent, /Invitation/);
+  f.$("duel-connect").requestSubmit();
+  const socket = f.sockets[0];
+  socket.open();
+  await turn();
+  assert.equal(socket.sent[0].type, "join");
+  socket.receive(welcome(0));
+  socket.receive(room());
+  await turn();
+  Object.defineProperty(f.window.navigator, "clipboard", {
+    value: undefined,
+    configurable: true,
+  });
+  Object.defineProperty(f.window.navigator, "share", {
+    value: undefined,
+    configurable: true,
+  });
+  f.$("duel-share").click();
+  await turn();
+  assert(!f.$("duel-invite-fallback").hidden);
+  const link = f.$("duel-invite-link").value;
+  assert.equal(new URL(link).searchParams.get("duel"), "ABC234");
+  assert(!link.includes("opaque"));
 });

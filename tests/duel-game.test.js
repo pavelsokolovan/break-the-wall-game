@@ -543,3 +543,31 @@ test("opposite exits at different microsteps of one tick still cancel each other
     );
   }
 });
+
+test("active-time limit ends by goals, ignores points, excludes pauses and freezes immutable results", () => {
+  for (const [goals, winner] of [
+    [[2, 1], 0],
+    [[1, 2], 1],
+    [[2, 2], null],
+  ]) {
+    const g = playing();
+    g.state.goals = goals;
+    g.state.players[0].points = 999999;
+    g.activeTicks = (R.activeDurationLimitMs * R.simulationHz) / 1000 - 1;
+    g.setPaused(true);
+    ticks(g, 300);
+    assert.equal(g.getResult(), null);
+    g.setPaused(false);
+    g.step();
+    const result = g.getResult();
+    assert.equal(result.winner, winner);
+    assert.equal(result.reason, "time_limit");
+    assert.equal(result.durationMs, R.activeDurationLimitMs);
+    ticks(g, 100);
+    assert.deepEqual(g.getResult(), result);
+  }
+  const g = new DuelGame({ seed: 1, matchId: "countdown-limit" });
+  g.start();
+  ticks(g, 180);
+  assert.equal(g.state.activeDurationMs, 0);
+});

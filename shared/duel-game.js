@@ -918,6 +918,11 @@ export class DuelGame {
       return;
     }
     this.state.activeDurationMs = (++this.activeTicks * 1000) / R.simulationHz;
+    if (this.state.activeDurationMs >= R.activeDurationLimitMs) {
+      const [a, b] = this.state.goals;
+      this.finish(a === b ? null : a > b ? 0 : 1, "time_limit");
+      return;
+    }
     this.updatePowerTimers();
     this.updateCombos();
     const starts = this.state.players.map((p) => p.x);

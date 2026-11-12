@@ -946,3 +946,168 @@ test(
     assert.deepEqual(g.state.goals, [0, 0]);
   },
 );
+
+test(
+  "manual pause budgets, consent and deadlines freeze actions and reset only on a rally",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const room = f.app.manager.rooms.get(code),
+      game = room.game;
+    game.state.players[0].ammo = 5;
+    a.messages = [];
+    b.messages = [];
+    a.send({ type: "input", seq: 1, x: 1, action: "fire" });
+    a.send({ type: "pause", requested: true, reason: "panel" });
+    const paused = await b.next("snapshot", (s) => s.phase === "paused");
+    assert.equal(paused.state.pause.reason, "panel");
+    const frozen = game.getState(),
+      tick = game.tick,
+      deadline = room.manual.deadline;
+    await f.advance(60);
+    assert.deepEqual(game.getState(), frozen);
+    assert.equal(game.tick, tick);
+    a.send({ type: "resume_play" });
+    await b.next("snapshot", (s) => s.state.pause?.consents?.[0]);
+    assert.equal(game.phase, "paused");
+    b.send({ type: "pause", requested: true });
+    await a.next("room", (r) => r.pauseUsed?.every(Boolean));
+    assert.equal(room.manual.deadline, deadline);
+    b.send({ type: "resume_play" });
+    await a.next("snapshot", (s) => s.phase === "playing");
+    await f.advance(1);
+    assert.equal(game.state.players[0].ammo, 5);
+    assert.equal(game.state.players[0].vx, 0);
+    a.send({ type: "pause", requested: true });
+    assert.equal((await a.next("error")).code, "INVALID_PHASE");
+    a.send({ type: "input", seq: 2, x: 1, action: "fire" });
+    a.send({ type: "pause", requested: true, reason: "background" });
+    await a.next("error");
+    assert.equal(game.pendingActions[0].fire, false);
+    assert.equal(game.state.players[0].targetX, 800);
+    game.resolveGoals(new Set([1]));
+    f.app.manager.flush(room, true);
+    assert.deepEqual(room.pauseUsed, [false, false]);
+    a.send({ type: "pause", requested: true });
+    await b.next(
+      "snapshot",
+      (s) => s.phase === "paused" && s.state.pause?.reason === "manual",
+    );
+    for (const c of f.app.manager.connections.values())
+      c.lastPong = room.manual.deadline;
+    f.setClock(room.manual.deadline);
+    f.app.manager.maintenance(f.app.manager.now());
+    assert.equal(room.manual, null);
+    assert.equal(game.phase, "goal_countdown");
+  },
+);
+
+test(
+  "manual pause survives reconnect countdown and cannot replenish the rally budget",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    a.send({ type: "pause", requested: true });
+    await b.next("snapshot", (s) => s.phase === "paused");
+    const room = f.app.manager.rooms.get(code),
+      deadline = room.manual.deadline;
+    a.socket.close();
+    await b.next("snapshot", (s) => s.phase === "reconnecting");
+    const c = await f.peer();
+    c.send({
+      type: "resume",
+      requestId: "recover",
+      code,
+      token: welcome.token,
+    });
+    await c.next("welcome");
+    await f.advance(181);
+    assert.equal(room.game.phase, "paused");
+    assert.equal(room.manual.deadline, deadline);
+    assert.deepEqual(room.pauseUsed, [true, false]);
+    c.send({ type: "resume_play" });
+    b.send({ type: "resume_play" });
+    await c.next("snapshot", (s) => s.phase === "playing");
+  },
+);
+
+test(
+  "rematch requires two connected consents, swaps identities and rotates tokens with clean input state",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome, joined } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    const room = f.app.manager.rooms.get(code),
+      old = room.game;
+    old.finish(0, "forfeit");
+    f.app.manager.flush(room, true);
+    const result = await a.next("result");
+    a.send({ type: "rematch", ready: true });
+    await b.next("room", (r) => r.players[0].rematchReady);
+    assert.equal(room.game, old);
+    a.send({ type: "rematch", ready: false });
+    await b.next(
+      "room",
+      (r) => !r.players[0].rematchReady && r.phase === "finished",
+    );
+    b.send({ type: "rematch", ready: true });
+    a.send({ type: "rematch", ready: true });
+    const wa = await a.next("welcome", (w) => w.rematch),
+      wb = await b.next("welcome", (w) => w.rematch);
+    assert.equal(wa.slot, 1);
+    assert.equal(wb.slot, 0);
+    assert.equal(wa.playerId, welcome.playerId);
+    assert.equal(wb.playerId, joined.playerId);
+    assert.notEqual(wa.token, welcome.token);
+    assert.notEqual(wb.token, joined.token);
+    assert.notEqual(wa.matchId, result.matchId);
+    assert.equal(wa.nextInputSeq, 1);
+    assert.deepEqual(old.getResult(), result);
+    assert.deepEqual(room.game.state.goals, [0, 0]);
+    assert.equal(room.game.phase, "countdown");
+    assert.deepEqual(room.pauseUsed, [false, false]);
+    assert.equal(room.finishedAt, undefined);
+    const thief = await f.peer();
+    thief.send({
+      type: "resume",
+      requestId: "old-token",
+      code,
+      token: welcome.token,
+    });
+    assert.equal((await thief.next("error")).code, "AUTH_FAILED");
+    await f.advance(180);
+    a.send({
+      type: "input",
+      matchId: result.matchId,
+      seq: 80,
+      x: 0.2,
+      action: "fire",
+    });
+    a.send({
+      type: "input",
+      matchId: room.game.matchId,
+      seq: 1,
+      x: 0.2,
+      action: "none",
+    });
+    await turn();
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(room.game.state.players[1].lastAckInputSeq, 1);
+    b.socket.close();
+    await a.next("room", (r) => !r.players[0].connected);
+    assert(room.seats.every((s) => !s?.rematchReady));
+  },
+);

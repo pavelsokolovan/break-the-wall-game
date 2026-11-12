@@ -7,8 +7,8 @@ A browser arcade game with original pixel graphics, synthesized chiptune sounds,
 The game has two separate modes: **Solo**, the existing single-player campaign, and
 **Online Duel**, the additional two-player online mode. Solo stays available without
 a multiplayer backend and keeps its existing saves. Online Duel is currently a local
-preview with connection recovery; the remaining session features and hosted deployment
-are later stages.
+preview with connection recovery and complete session controls; hosted deployment
+and real-device release validation are later stages.
 
 ## Play
 
@@ -89,7 +89,7 @@ Bazooka pickups add five stored shots, capped at fifteen. The cannon is visible 
 
 ## Online Duel local preview
 
-[Stage 7](docs/ONLINE_DUEL_STAGE_07_SPEC.md) builds on private rooms and readiness
+[Stage 8](docs/ONLINE_DUEL_STAGE_08_SPEC.md) builds on private rooms and readiness
 with symmetric central walls, opposite paddles, automatic serves, damage, and first-to-five
 results. Break bricks for personal points and independent combos; goals decide the winner.
 Walls include armor, explosive chains, reinforced plates, and isolated steel as waves
@@ -146,8 +146,22 @@ port 3001. The development client uses the frontend hostname on port 3001. Produ
 requires public `VITE_MULTIPLAYER_URL=wss://<actual-backend>/ws`; without it, Online Duel
 shows an unavailable message. No hosted backend has been provisioned in this stage.
 
-Rematches, online pause, invitations, duel history and free-host deployment remain in
-later stages. The server enforces Origin checks, message and resource
+Use **Invite** to share a room-only link, copy it, or select it manually when sharing
+is unavailable. Invitations prefill the room code; entering and joining stay explicit.
+**Pause**, P/Escape, opening **Legend / Duel History**, and backgrounding share one
+30-second pause per player per rally. Both players choose Resume (closing a panel or
+returning to the foreground supplies your consent), or play resumes when the deadline
+expires. Panels cannot keep play frozen after that deadline. Disconnect recovery has
+its separate grace period and preserves any unexpired manual pause.
+
+Matches end after 15 minutes of active play: higher goals wins, tied goals draws;
+brick points never break ties. After a result, both connected players can choose
+**Rematch** to swap sides and start a fresh match. **Duel History** stores the latest
+20 server-confirmed results separately under `brickfall-blitz:duel:v1`; unavailable
+storage falls back to memory. Connected voluntary leave briefly waits for the server's
+forfeit result before clearing identity; missed results are never invented.
+
+Free-host deployment remains Stage 9. The server enforces Origin checks, message and resource
 limits, input sequencing, bounded send buffers, and idle cleanup. Forwarded IP headers
 are ignored until trusted proxy configuration is implemented.
 
