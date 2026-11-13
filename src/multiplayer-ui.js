@@ -61,12 +61,19 @@ export function mountMultiplayer({
     $("online-mode").textContent = `ONLINE DUEL · JOIN ${invited}`;
   }
   const clock = new ServerClock(),
-    sync = new DuelSync({ clock, interpolationMs: 50, correctionMs: 40 });
+    sync = new DuelSync({
+      clock,
+      interpolationMs: 50,
+      correctionMs: 40,
+      authoritativeContact: true,
+    });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
   function status(text) {
     $("duel-status").textContent = text;
   }
   function controls() {
+    $("duel-practice").disabled =
+      pending || !!room || client.recovering || !url;
     $("duel-create").disabled = pending || !!room || client.recovering || !url;
     $("duel-join").disabled = pending || !!room || client.recovering || !url;
     $("duel-code").disabled = pending || !!room || client.recovering;
@@ -77,7 +84,7 @@ export function mountMultiplayer({
     $("duel-cancel").hidden = !pending || !!room;
     $("duel-retry").hidden = pending || !!room || !lastRequest;
     const connected = client.socket?.readyState === 1 && !client.recovering;
-    $("duel-share").hidden = !room;
+    $("duel-share").hidden = !room || !!room.practice;
     $("duel-pause").hidden = !snapshot || !!result;
     $("duel-pause").textContent =
       snapshot?.phase === "paused" &&
@@ -149,7 +156,7 @@ export function mountMultiplayer({
         $("duel-slots").textContent = message.players
           .map(
             (p) =>
-              `${p.slot === client.slot ? "YOU" : "OPPONENT"}: ${!p.connected ? "waiting" : p.ready ? "ready" : "not ready"}`,
+              `${p.slot === client.slot ? "YOU" : room.practice ? "BOT" : "OPPONENT"}: ${!p.connected ? "waiting" : p.ready ? "ready" : "not ready"}`,
           )
           .join(" · ");
         $("duel-ready").textContent = room.players[client.slot]?.ready
@@ -229,7 +236,7 @@ export function mountMultiplayer({
           }
       }
       if (message.type === "result") {
-        history.save(message, client.slot ?? viewSlot);
+        if (!room?.practice) history.save(message, client.slot ?? viewSlot);
         if (result?.matchId === message.matchId) return;
         result = message;
         status(
@@ -389,6 +396,7 @@ export function mountMultiplayer({
   };
   $("duel-cancel").onclick = cancelRequest;
   $("duel-retry").onclick = () => request(lastRequest);
+  $("duel-practice").onclick = () => request("practice");
   $("duel-create").onclick = () => request("create");
   $("duel-connect").onsubmit = (e) => {
     e.preventDefault();
@@ -592,7 +600,9 @@ export function mountMultiplayer({
     else
       status(
         s.phase === "playing"
-          ? "First to five · drag or ← → / A D"
+          ? room?.practice
+            ? "Practice vs bot · first to five"
+            : "First to five · drag or ← → / A D"
           : s.phase === "finished"
             ? "Match finished"
             : "Get ready · automatic serve",

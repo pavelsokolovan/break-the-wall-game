@@ -439,3 +439,23 @@ test("bounce reversals use confirmed position instead of blending through a padd
   assert.equal(displayed.y, 890);
   assert.equal(displayed.vy, -360);
 });
+
+test("contact presentation pairs confirmed ball and paddle despite input prediction and network delay", () => {
+  for (const slot of [0, 1]) {
+    const sync = new DuelSync({ authoritativeContact: true });
+    const s = snapshot(1000);
+    s.state.players[slot].x = 200;
+    const b = s.state.balls[0];
+    Object.assign(b, {
+      x: 600,
+      y: slot === 0 ? 910 : 90,
+      vy: slot === 0 ? 360 : -360,
+    });
+    sync.push(s, 1100, slot);
+    sync.setTarget(slot === 0 ? 0.9 : 0.1, 1100);
+    const out = sync.frame(1140).snapshot;
+    assert.equal(out.state.players[slot].x, 200);
+    assert.equal(out.state.balls[0].x, 600);
+    assert.equal(out.state.balls[0].y, b.y);
+  }
+});

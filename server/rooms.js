@@ -1,3 +1,4 @@
+import { DuelBot } from "../shared/duel-bot.js";
 import {
   randomBytes,
   randomInt,
@@ -154,6 +155,7 @@ export class RoomManager {
       type: "room",
       code: room.code,
       phase: this.effectivePhase(room),
+      practice: !!room.bot,
       pauseUsed: room.pauseUsed || [false, false],
       serverTime: this.now(),
       reconnectDeadlineServerTime:
@@ -290,7 +292,7 @@ export class RoomManager {
       );
 
     let room;
-    if (message.type === "create") {
+    if (["create", "practice"].includes(message.type)) {
       if (this.rooms.size >= this.maxRooms)
         return fail("SERVER_BUSY", "All rooms are busy. Try again later.");
       let code;
@@ -328,6 +330,16 @@ export class RoomManager {
       token: randomBytes(16).toString("hex"),
     };
     room.seats[slot] = seat;
+    if (message.type === "practice") {
+      room.bot = new DuelBot(1, randomBytes(4).readUInt32LE());
+      room.seats[1] = {
+        bot: true,
+        socket: { readyState: 1, bufferedAmount: 0, send() {}, close() {} },
+        ready: true,
+        playerId: randomUUID(),
+        token: randomBytes(16).toString("hex"),
+      };
+    }
     connection.room = room;
     connection.slot = slot;
     this.log("seat_joined", { code: room.code });
@@ -375,6 +387,7 @@ export class RoomManager {
         "There is no manual pause to resume.",
       );
     room.manual.consents[c.slot] = true;
+    if (room.bot) room.manual.consents[room.bot.slot] = true;
     if (room.manual.consents.every(Boolean)) this.endManual(room);
     else this.snapshot(room);
   }
@@ -393,6 +406,7 @@ export class RoomManager {
         "Finish the current match first.",
       );
     room.seats[c.slot].rematchReady = ready;
+    if (room.bot) room.seats[room.bot.slot].rematchReady = ready;
     if (!room.seats.every((s) => this.connected(s) && s.rematchReady)) {
       this.broadcast(room, this.roomMessage(room));
       return;
@@ -415,6 +429,10 @@ export class RoomManager {
       seat.token = randomBytes(16).toString("hex");
       seat.rematchReady = false;
       seat.ready = false;
+      if (seat.bot) {
+        room.bot = new DuelBot(slot, randomBytes(4).readUInt32LE());
+        return;
+      }
       const connection = this.connections.get(seat.socket);
       connection.slot = slot;
       connection.cache.clear();
@@ -437,7 +455,7 @@ export class RoomManager {
         clientTime: message.clientTime,
         serverTime: this.now(),
       });
-    if (["create", "join", "resume"].includes(message.type))
+    if (["create", "join", "resume", "practice"].includes(message.type))
       return this.request(c, message);
     const room = c.room;
     if (!room) return error(socket, "INVALID_PHASE", "Join a room first.");
@@ -509,7 +527,7 @@ export class RoomManager {
     room.seats[connection.slot] = null;
     connection.room = null;
     connection.slot = null;
-    if (!room.seats.some(Boolean)) this.rooms.delete(room.code);
+    if (!room.seats.some((s) => s && !s.bot)) this.rooms.delete(room.code);
     else this.broadcast(room, this.roomMessage(room));
   }
   detach(socket) {
@@ -582,6 +600,7 @@ export class RoomManager {
       ticks++;
       for (const room of this.rooms.values())
         if (room.game && LIVE.includes(room.game.phase)) {
+          room.bot?.update(room.game);
           room.game.step();
           this.flush(room);
         }

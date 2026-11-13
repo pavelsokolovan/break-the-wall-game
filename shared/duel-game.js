@@ -48,6 +48,10 @@ function player(slot) {
 // Relative x removes the paddle's linear motion over this microstep.
 function paddleContact(x, y, dx, dy, halfWidth, radius, face) {
   if (dy <= 0 || y > face + EPS) return null;
+  // A moving paddle can enter the ball's front half while it already overlaps the
+  // front face. A negative sweep root must not discard this valid contact.
+  const nearestX = clamp(x, -halfWidth, halfWidth);
+  if ((x - nearestX) ** 2 + (y - face) ** 2 <= radius ** 2 + EPS) return 0;
   let first = Infinity;
   const t = (face - radius - y) / dy;
   if (t >= -EPS && t <= 1 + EPS && Math.abs(x + dx * t) <= halfWidth)

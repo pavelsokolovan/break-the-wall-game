@@ -611,3 +611,24 @@ test("second ball can equalize at five; a later unequal completed round decides 
   assert.deepEqual(g.getResult().goals, [7, 5]);
   assert.equal(g.getResult().winner, 0);
 });
+
+test("approaching front-edge overlap is caught at either paddle; backside overlap is never rescued", () => {
+  for (const slot of [0, 1])
+    for (const behind of [false, true]) {
+      const g = playing();
+      const face =
+        slot === 0 ? R.paddleTopY[0] : R.paddleTopY[1] + R.paddleHeight;
+      const sign = slot === 0 ? 1 : -1;
+      g.state.balls = [
+        ball(g, {
+          x: 400,
+          y: face + sign * (behind ? 3 : -3),
+          vx: 0,
+          vy: sign * 360,
+        }),
+      ];
+      g.step();
+      assert.equal(Math.sign(g.state.balls[0].vy), behind ? sign : -sign);
+      assert.deepEqual(g.state.goals, [0, 0]);
+    }
+});

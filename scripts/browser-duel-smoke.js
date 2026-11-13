@@ -634,9 +634,52 @@ try {
       ),
     );
   }
+  // One page can enter a real server-hosted practice match without a second user.
+  await evaluate(
+    a,
+    "document.getElementById('online-mode').click();document.getElementById('duel-practice').click()",
+  );
+  await until(a, "!document.getElementById('duel-ready').disabled");
+  await evaluate(a, "document.getElementById('duel-ready').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Practice vs bot')",
+  );
+  const practiceRoom = [...app.manager.rooms.values()].find((room) => room.bot);
+  assert(practiceRoom);
+  await wait(600);
+  assert(
+    practiceRoom.game.state.players[practiceRoom.bot.slot].lastAckInputSeq > 0,
+  );
+  await evaluate(a, "document.getElementById('duel-pause').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Paused')",
+  );
+  await evaluate(a, "document.getElementById('duel-pause').click()");
+  await until(
+    a,
+    "document.getElementById('duel-status').textContent.includes('Practice vs bot')",
+  );
+  await command("Page.bringToFront", {}, a);
+  const practiceShot = await command(
+    "Page.captureScreenshot",
+    { format: "png" },
+    a,
+  );
+  await writeFile(
+    "/tmp/brickfall-practice.png",
+    Buffer.from(practiceShot.data, "base64"),
+  );
+  await evaluate(
+    a,
+    "window.confirm=()=>true;document.getElementById('duel-leave').click()",
+  );
+  await until(a, "document.getElementById('duel-game').hidden");
+  assert(!app.manager.rooms.has(practiceRoom.code));
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",

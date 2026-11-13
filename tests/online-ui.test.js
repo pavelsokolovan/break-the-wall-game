@@ -1039,3 +1039,30 @@ test("Duel drag strip moves immediately without firing and action control is abo
   );
   assert.equal(socket.sent.length, count);
 });
+
+test("practice is explicit, uses a real server request, labels bot and excludes competitive history", async (t) => {
+  const f = fixture(t);
+  f.ui.switchMode(true);
+  f.$("duel-practice").click();
+  await turn();
+  const socket = f.sockets[0];
+  socket.open();
+  await turn();
+  assert.equal(socket.sent[0].type, "practice");
+  socket.receive(welcome(0));
+  socket.receive({ ...room(), practice: true });
+  socket.receive(snapshot());
+  assert.match(f.$("duel-status").textContent, /Practice vs bot/);
+  assert(f.$("duel-share").hidden);
+  socket.receive({
+    type: "result",
+    matchId: "m",
+    winner: 0,
+    reason: "forfeit",
+    goals: [2, 0],
+    points: [0, 0],
+    durationMs: 1000,
+    waveCount: 1,
+  });
+  assert.equal(f.ui.history.read().length, 0);
+});

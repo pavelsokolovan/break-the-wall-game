@@ -1233,3 +1233,43 @@ test(
     assert(!output.includes(welcome.token));
   },
 );
+
+test(
+  "one human can practice against a fallible server bot, pause, resume, rematch and leave cleanly",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      a = await f.peer();
+    a.send({ type: "practice", requestId: "practice" });
+    const welcome = await a.next("welcome");
+    const lobby = await a.next("room");
+    assert(lobby.practice);
+    assert(lobby.players[1].ready);
+    a.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(210);
+    const room = f.app.manager.rooms.get(welcome.code);
+    assert(room.bot);
+    assert.equal(room.game.state.balls.length, 2);
+    assert(room.game.state.players[1].lastAckInputSeq > 0);
+    a.send({ type: "pause", requested: true });
+    await a.next("snapshot", (s) => s.phase === "paused");
+    const tick = room.game.tick;
+    await f.advance(60);
+    assert.equal(room.game.tick, tick);
+    a.send({ type: "resume_play" });
+    await a.next("snapshot", (s) => s.phase === "playing");
+    room.game.finish(0, "forfeit");
+    f.app.manager.flush(room, true);
+    await a.next("result");
+    a.send({ type: "rematch", ready: true });
+    const swapped = await a.next("welcome", (m) => m.rematch);
+    assert.equal(swapped.slot, 1);
+    assert.equal(room.bot.slot, 0);
+    await f.advance(210);
+    assert(room.game.state.players[0].lastAckInputSeq > 0);
+    a.send({ type: "leave" });
+    await a.next("result");
+    assert(!f.app.manager.rooms.has(welcome.code));
+  },
+);

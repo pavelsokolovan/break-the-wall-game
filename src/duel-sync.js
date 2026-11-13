@@ -56,7 +56,9 @@ export class DuelSync {
     clock = new ServerClock(),
     interpolationMs = 100,
     correctionMs = 80,
+    authoritativeContact = false,
   } = {}) {
+    this.authoritativeContact = authoritativeContact;
     this.interpolationMs = interpolationMs;
     this.correctionMs = correctionMs;
     this.clock = clock;
@@ -225,6 +227,28 @@ export class DuelSync {
         this.local.width / 2,
         R.width - this.local.width / 2,
       );
+    }
+    // Do not combine an input-predicted paddle with an older interpolated ball
+    // at contact: that can display a save the authority never received in time.
+    if (this.authoritativeContact && snapshot.phase === "playing") {
+      for (const slot of [0, 1]) {
+        const nearby = latest.snapshot.state.balls.filter(
+          (b) => !b.held && Math.abs(b.y - R.paddleTopY[slot]) < 110,
+        );
+        if (!nearby.length) continue;
+        snapshot.state.players[slot].x = latest.snapshot.state.players[slot].x;
+        for (const ball of nearby) {
+          const rendered = snapshot.state.balls.find((b) => b.id === ball.id);
+          if (rendered) {
+            rendered.x = ball.x;
+            rendered.y = ball.y;
+          }
+        }
+        if (slot === this.slot && this.local) {
+          this.local.x = latest.snapshot.state.players[slot].x;
+          this.local.offset = 0;
+        }
+      }
     }
     for (const b of snapshot.state.balls)
       if (b.held) {

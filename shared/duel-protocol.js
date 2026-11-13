@@ -185,6 +185,7 @@ const stateSchema = object({
 const code = { kind: "code" };
 const clientSchemas = {
   create: { requestId },
+  practice: { requestId },
   join: { requestId, code },
   resume: { requestId, code, token },
   ready: { ready: bool },
@@ -291,6 +292,7 @@ const serverSchemas = {
   },
   room: {
     code,
+    practice: optional(bool),
     serverTime: optional(nonnegative),
     reconnectDeadlineServerTime: optional(nullable(nonnegative)),
     phase: roomPhase,

@@ -184,3 +184,15 @@ Physical phones and real internet/network conditions are not yet validated.
 
 The full target is [ONLINE_DUEL_SPEC.md](docs/ONLINE_DUEL_SPEC.md). Delivery stages and
 completed specifications are in [the roadmap](docs/ONLINE_DUEL_ROADMAP.md).
+
+### Duel practice and contact handling
+
+Choose **Online Duel → Test vs Bot → Ready** to test with one device. This uses the
+actual multiplayer server and network connection. The bot reacts with delays and
+imperfect aiming, can miss balls, and uses normal paddle/action limits. You can pause,
+resume and rematch (swapping sides); practice does not add competitive Duel history.
+
+Front-edge overlap contacts are resolved while approaching a paddle. Near paddle
+contact, balls and paddles use the same authoritative snapshot so prediction cannot
+show a false save. Internet delay can still make last-moment moves arrive too late.
+See [contact investigation and bot details](docs/DUEL_CONTACT_AND_PRACTICE.md).
