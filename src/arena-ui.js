@@ -37,7 +37,13 @@ export function mountArena({
     $("arena-status").textContent = text;
   }
   function controls() {
-    for (const id of ["arena-create3", "arena-create4", "arena-join"])
+    for (const id of [
+      "arena-create3",
+      "arena-create4",
+      "arena-join",
+      "arena-practice",
+      "arena-bots",
+    ])
       $(id).disabled = pending || !!room || !url;
     $("arena-code").disabled = pending || !!room;
     $("arena-ready").hidden = !room || !!room.state;
@@ -124,7 +130,7 @@ export function mountArena({
       const node = doc.createElement("span"),
         state = room.state?.players[p.slot];
       node.style.color = ARENA_COLORS[p.slot];
-      node.textContent = `${p.slot === slot ? "YOU" : `P${p.slot + 1}`} ${ARENA_SIDES[p.slot]} · ${state ? `${state.lives} lives · ${state.points} pts` : !p.connected ? "waiting" : p.ready ? "ready" : "not ready"}`;
+      node.textContent = `${p.slot === slot ? "YOU" : p.bot ? `BOT ${p.slot}` : `P${p.slot + 1}`} ${ARENA_SIDES[p.slot]} · ${state ? `${state.lives} lives · ${state.points} pts` : !p.connected ? "waiting" : p.ready ? "ready" : "not ready"}`;
       list.append(node);
     }
   }
@@ -167,7 +173,7 @@ export function mountArena({
           ? `Starting in ${Math.ceil(s.countdown / 60)}…`
           : !s.players[slot].lives
             ? "Eliminated · spectating"
-            : `You defend ${ARENA_SIDES[slot]} · drag along your side`,
+            : `${room.practice ? "Practice · " : ""}You defend ${ARENA_SIDES[slot]} · drag along your side`,
     );
     draw();
   }
@@ -389,6 +395,13 @@ export function mountArena({
   $("arena-mode").onclick = enter;
   $("solo-mode").addEventListener("click", () => exit(true));
   $("online-mode").addEventListener("click", () => exit(false));
+  $("arena-practice").onclick = () => {
+    const bots = Number($("arena-bots").value);
+    if (bots === 1) {
+      $("online-mode").click();
+      $("duel-practice").click();
+    } else request({ type: "practice", bots });
+  };
   $("arena-create3").onclick = () => request({ type: "create", count: 3 });
   $("arena-create4").onclick = () => request({ type: "create", count: 4 });
   $("arena-join").onclick = () => {

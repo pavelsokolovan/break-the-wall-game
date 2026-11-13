@@ -780,9 +780,54 @@ try {
     for (const p of arenaPages.slice(0, count))
       await evaluate(p, "document.getElementById('solo-mode').click()");
   }
+  // One human can select all supported practice sizes through the same selector.
+  for (const bots of [1, 2, 3]) {
+    app.manager.ipAttempts.clear();
+    await evaluate(
+      a,
+      `document.getElementById('arena-mode').click();document.getElementById('arena-bots').value='${bots}';document.getElementById('arena-practice').click()`,
+    );
+    if (bots === 1) {
+      await until(a, "!document.getElementById('duel-ready').disabled");
+      await evaluate(a, "document.getElementById('duel-ready').click()");
+      await until(
+        a,
+        "!document.getElementById('duel-game').hidden && document.getElementById('duel-status').textContent.includes('Practice')",
+      );
+      assert([...app.manager.rooms.values()].some((r) => r.bot));
+      await evaluate(
+        a,
+        "window.confirm=()=>true;document.getElementById('duel-leave').click()",
+      );
+      await until(a, "document.getElementById('duel-game').hidden");
+      assert.equal(app.manager.rooms.size, 0);
+    } else {
+      await until(
+        a,
+        "document.getElementById('arena-status').textContent.includes('Practice')",
+      );
+      const room = [...app.arenaManager.rooms.values()][0];
+      assert.equal(room.count, bots + 1);
+      assert.equal(room.bots.length, bots);
+      await until(
+        a,
+        `document.getElementById('arena-members').textContent.includes('BOT ${bots}')`,
+      );
+      await wait(350);
+      assert(room.game.players.slice(1).every((p) => p.seq > 0));
+      await evaluate(
+        a,
+        "window.confirm=()=>true;document.getElementById('arena-leave').click()",
+      );
+      await until(a, "document.getElementById('arena-game').hidden");
+      await wait(50);
+      assert.equal(app.arenaManager.rooms.size, 0);
+    }
+    await evaluate(a, "document.getElementById('solo-mode').click()");
+  }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; real 3/4-page square arenas; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; real 3/4-page square arenas; selectable 1/2/3-bot practice; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",

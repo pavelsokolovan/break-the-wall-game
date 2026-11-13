@@ -16,7 +16,12 @@ the ball; eliminated sides become walls. The last player standing wins. Three-pl
 rooms have a solid unused left wall. Drag along your side, or use the strip below the
 field. Leaving or disconnecting forfeits; this initial arena release has no reconnect,
 power-ups, match history or rematch. See [the arena specification](docs/ARENA_SPEC.md).
-The existing two-player Duel retains its field, rules, bonuses and recovery behavior.
+To test alone, choose **1, 2, or 3 bots** and press **Test with bots** in the
+3–4 Players setup. One bot runs the existing Duel practice; two or three bots run the
+square arena. Arena practice starts automatically; Duel practice asks you to press
+Ready. Practice uses the live server. Bots react with
+a delay and can miss. The existing two-player Duel retains its field, rules, bonuses
+and recovery behavior.
 
 ## Play
 

@@ -1,4 +1,5 @@
 import { randomBytes, randomInt } from "node:crypto";
+import { ArenaBot } from "../shared/arena-bot.js";
 import { ArenaGame } from "../shared/arena-game.js";
 import { Bucket, send } from "./protocol.js";
 import { normalizeRoomCode, ROOM_CODE_ALPHABET } from "../shared/duel-rules.js";
@@ -11,6 +12,8 @@ export function parseArenaMessage(text) {
         code: "VERSION_MISMATCH",
         message: "Refresh the game.",
       };
+    if (m.type === "practice" && [2, 3].includes(m.bots))
+      return { ok: true, value: { type: "practice", bots: m.bots } };
     if (m.type === "create" && [3, 4].includes(m.count))
       return { ok: true, value: { type: "create", count: m.count } };
     if (m.type === "join" && normalizeRoomCode(m.code))
@@ -65,16 +68,19 @@ export class ArenaRooms {
       type: "arena",
       code: room.code,
       count: room.count,
+      practice: !!room.bots,
       players: room.seats.map((c, slot) => ({
         slot,
         connected: !!c,
         ready: !!c?.ready,
+        bot: !!c?.bot,
       })),
       state: room.game?.snapshot() ?? null,
     };
   }
   broadcast(room) {
-    for (const c of room.seats) if (c) send(c.socket, this.message(room));
+    for (const c of room.seats)
+      if (c && !c.bot) send(c.socket, this.message(room));
   }
   handle(socket, m) {
     const c = this.connections.get(socket);
@@ -82,7 +88,7 @@ export class ArenaRooms {
     const fail = (message) =>
       send(socket, { v: 1, type: "arena_error", message });
     if (m.type === "ping") return send(socket, { v: 1, type: "arena_pong" });
-    if (["create", "join"].includes(m.type)) {
+    if (["create", "practice", "join"].includes(m.type)) {
       if (c.room) return fail("Leave your current room first.");
       let bucket = this.attempts.get(c.ip);
       if (!bucket) {
@@ -92,7 +98,7 @@ export class ArenaRooms {
       if (!bucket.take(this.now()))
         return fail("Too many room requests. Wait a minute.");
       let room;
-      if (m.type === "create") {
+      if (["create", "practice"].includes(m.type)) {
         if (this.rooms.size + this.roomCount() >= this.maxRooms)
           return fail("Rooms are busy. Try later.");
         let code;
@@ -104,8 +110,8 @@ export class ArenaRooms {
         } while (this.rooms.has(code));
         room = {
           code,
-          count: m.count,
-          seats: Array(m.count).fill(null),
+          count: m.type === "practice" ? m.bots + 1 : m.count,
+          seats: Array(m.type === "practice" ? m.bots + 1 : m.count).fill(null),
           created: this.now(),
           game: null,
         };
@@ -118,8 +124,17 @@ export class ArenaRooms {
       }
       c.slot = room.seats.indexOf(null);
       c.room = room;
-      c.ready = false;
+      c.ready = m.type === "practice";
       room.seats[c.slot] = c;
+      if (m.type === "practice") {
+        room.bots = Array.from(
+          { length: m.bots },
+          (_, i) => new ArenaBot(i + 1, randomBytes(4).readUInt32LE()),
+        );
+        for (const bot of room.bots)
+          room.seats[bot.slot] = { bot: true, ready: true };
+        room.game = new ArenaGame(room.count, randomBytes(4).readUInt32LE());
+      }
       send(socket, { v: 1, type: "arena_welcome", slot: c.slot });
       this.broadcast(room);
       return;
@@ -155,7 +170,8 @@ export class ArenaRooms {
     c.room = null;
     c.slot = null;
     c.ready = false;
-    if (!room.seats.some(Boolean)) this.rooms.delete(room.code);
+    if (!room.seats.some((seat) => seat && !seat.bot))
+      this.rooms.delete(room.code);
     else this.broadcast(room);
   }
   detach(socket) {
@@ -181,6 +197,7 @@ export class ArenaRooms {
       this.accumulator -= 1000 / 60;
       for (const room of this.rooms.values())
         if (room.game && room.game.phase !== "finished") {
+          for (const bot of room.bots ?? []) bot.update(room.game);
           room.game.step();
           if (room.game.tick % 2 === 0 || room.game.phase === "finished")
             this.broadcast(room);
@@ -191,7 +208,7 @@ export class ArenaRooms {
   }
   interrupt(room, message) {
     for (const c of room.seats)
-      if (c) {
+      if (c && !c.bot) {
         send(c.socket, { v: 1, type: "arena_error", message, terminal: true });
         c.room = null;
         c.slot = null;

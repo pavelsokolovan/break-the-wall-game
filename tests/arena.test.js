@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import WebSocket from "ws";
+import { ArenaBot } from "../shared/arena-bot.js";
 import { ArenaGame, arenaPaddle } from "../shared/arena-game.js";
 import { ArenaRooms, parseArenaMessage } from "../server/arena-rooms.js";
 import { createDuelServer } from "../server/index.js";
@@ -132,6 +133,11 @@ test("seeded multi-ball simulation remains deterministic and finite", () => {
 test("arena protocol rejects invalid requests and discards forged state", () => {
   for (const m of [
     { v: 1, type: "create", count: 2 },
+    ...[0, 1, 4, 2.5, "2", null].map((bots) => ({
+      v: 1,
+      type: "practice",
+      bots,
+    })),
     { v: 1, type: "input", seq: 1, x: 2 },
     { v: 1, type: "ready", ready: "yes" },
   ])
@@ -306,3 +312,132 @@ test("arena shares room capacity and IP request buckets with Duel", () => {
   assert.match(socket.messages.at(-1).message, /Too many/);
   assert.equal(manager.rooms.size, 0);
 });
+
+test("arena bots use ordinary side inputs with limited travel and never alter physics", () => {
+  for (let slot = 0; slot < 4; slot++) {
+    const game = playing(4),
+      bot = new ArenaBot(slot, 42),
+      pose = arenaPaddle(slot, 650);
+    game.balls = [
+      {
+        id: 100,
+        x: pose.x + pose.nx * 200,
+        y: pose.y + pose.ny * 200,
+        vx: -pose.nx * 340,
+        vy: -pose.ny * 340,
+        r: 9,
+        owner: 0,
+      },
+    ];
+    const before = game.snapshot();
+    bot.update(game);
+    assert.equal(game.players[slot].seq, 1);
+    assert(Math.abs(game.players[slot].target - 400) <= 100);
+    assert.notEqual(game.players[slot].target, 400);
+    assert.equal(game.players[slot].t, 400);
+    assert.deepEqual(game.balls, before.balls);
+    assert.deepEqual(game.bricks, before.bricks);
+    assert.deepEqual(
+      game.players.map((p) => [p.lives, p.points]),
+      before.players.map((p) => [p.lives, p.points]),
+    );
+    bot.update(game);
+    assert.equal(
+      game.players[slot].seq,
+      1,
+      "reaction delay prevents perfect per-tick tracking",
+    );
+    game.players[slot].lives = 0;
+    game.activeTicks += 60;
+    bot.update(game);
+    assert.equal(
+      game.players[slot].seq,
+      1,
+      "eliminated bot stops sending input",
+    );
+  }
+});
+test("seeded arena bots return balls, lose lives and finish matches deterministically", () => {
+  for (const count of [3, 4]) {
+    const run = () => {
+      const g = playing(count),
+        bots = g.players.map((p) => new ArenaBot(p.slot, p.slot + 45));
+      let returned = false;
+      for (let i = 0; i < 36001 && g.phase !== "finished"; i++) {
+        const owners = new Map(g.balls.map((b) => [b.id, b.owner]));
+        bots.forEach((b) => b.update(g));
+        g.step();
+        if (
+          g.balls.some((b) => owners.has(b.id) && owners.get(b.id) !== b.owner)
+        )
+          returned = true;
+      }
+      assert(returned, "bots can return balls");
+      assert(
+        g.players.some((p) => p.lives < 5),
+        "bots can miss balls",
+      );
+      assert.equal(g.phase, "finished");
+      return g.snapshot();
+    };
+    assert.deepEqual(run(), run());
+  }
+});
+test(
+  "real two/three-bot arena practice auto-starts, moves bots, rejects joins and cleans up",
+  { timeout: 15000 },
+  async (t) => {
+    let clock = 0;
+    const app = await createDuelServer({
+      host: "127.0.0.1",
+      port: 0,
+      origins: ["http://localhost:5173"],
+      now: () => clock,
+      autoSchedule: false,
+    });
+    t.after(() => app.close());
+    const connect = async () => {
+      const ws = new WebSocket(`ws://127.0.0.1:${app.port}/arena`, {
+        origin: "http://localhost:5173",
+      });
+      const peer = new Peer(ws);
+      await once(ws, "open");
+      return peer;
+    };
+    for (const bots of [2, 3]) {
+      const human = await connect(),
+        outsider = await connect();
+      human.send({ type: "practice", bots });
+      await human.next("arena_welcome");
+      const lobby = await human.next(
+        "arena",
+        (m) => m.state?.phase === "countdown",
+      );
+      assert.equal(lobby.count, bots + 1);
+      assert.equal(lobby.practice, true);
+      assert.equal(lobby.players.filter((p) => p.bot).length, bots);
+      assert(lobby.players.every((p) => p.ready));
+      outsider.send({ type: "join", code: lobby.code });
+      assert.match(
+        (await outsider.next("arena_error")).message,
+        /full|started/,
+      );
+      for (let i = 0; i < 240; i++) {
+        clock += 1000 / 60;
+        app.arenaManager.advance();
+      }
+      const game = app.arenaManager.rooms.get(lobby.code).game;
+      assert.equal(game.phase, "playing");
+      assert(game.players.slice(1).every((p) => p.seq > 0));
+      assert(game.players.slice(1).some((p) => p.t !== 400));
+      if (bots === 2) human.send({ type: "leave" });
+      else human.ws.close();
+      const end = performance.now() + 2500;
+      while (app.arenaManager.rooms.has(lobby.code) && performance.now() < end)
+        await new Promise((r) => setTimeout(r, 2));
+      assert.equal(app.arenaManager.rooms.size, 0, "no orphan bot-only room");
+      human.ws.close();
+      outsider.ws.close();
+    }
+  },
+);

@@ -1742,3 +1742,15 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
 .mode-selector {
   flex-wrap: wrap;
 }
+
+#arena-bots {
+  min-height: 48px;
+  width: 100%;
+  padding: 8px;
+  color: var(--lime);
+  background: #151526;
+  border: 1px solid var(--border);
+  font:
+    20px "VT323",
+    monospace;
+}

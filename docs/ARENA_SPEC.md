@@ -53,3 +53,36 @@ Initial arena play has one central brick layout, no bonus drops and no saved res
 After disconnect, use Leave and create/join another room. Existing Duel features remain
 available in Online Duel. Push and deploy both the backend and Pages to enable arena
 on the public site; the existing multiplayer URL configuration remains valid.
+
+## Selectable bot practice
+
+The arena setup offers a bot-count selector and **Test with bots** button:
+
+- One bot opens the established two-player Duel practice mode; press Ready to start.
+- Two bots start a three-player square arena: human bottom, bots right/top, left wall.
+- Three bots start a four-player square arena: human bottom, bots on the other sides.
+
+Arena practice uses the real backend through `/arena` with `{v:1,type:"practice",bots:2|3}`.
+The server validates the count, enforces the shared room/IP budgets, fills labelled bot
+seats and starts the usual countdown automatically. Other humans cannot join practice.
+Snapshots identify `practice` rooms and `bot` seats; human room setup/readiness is unchanged.
+Practice requires a server connection and uses the same physics, lives, respawns and
+results as human arenas. The sole human leaving/disconnecting deletes the room even
+while bots remain. Expiry, stalled-server interruption and shutdown skip bot transports.
+
+Bots read current incoming balls and submit ordinary sequenced paddle inputs. They
+react every 150–300 ms, move at most 100 game pixels per decision, and make aiming
+errors, including deliberate misses. They do not change balls, lives, points, speed or
+collision rules. Eliminated bots stop controlling their paddle. The selector does not
+introduce bots into human rooms or replace disconnected humans.
+
+Validation adds protocol count rejection, all four side-axis controls, bounded reaction/
+travel, deterministic matches with returns and misses, real two/three-bot WebSocket
+practice, join rejection and leave/disconnect cleanup. Browser checks exercise all three
+selector choices alongside the existing Solo, Duel and human arena flows.
+
+Bot extension verification: all 212 automated tests pass (13 arena tests), along with
+syntax/formatting checks, the Pages production build and the full Chromium smoke run.
+The browser run selects one, two and three bots, starts each game, verifies bot seats
+and movement, and leaves without orphan rooms. No physical-phone or hosted deployment
+validation is claimed by these local checks.
