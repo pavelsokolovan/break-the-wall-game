@@ -1457,3 +1457,33 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
     font-size: 14px;
   }
 }
+
+/* One clear, readable connection message, including on narrow phone screens. */
+#duel-panel:has(#duel-loading:not([hidden])) #duel-status {
+  display: none;
+}
+.duel-loading {
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px auto;
+  padding: 18px 14px;
+  max-width: 460px;
+  background: #151526;
+  border: 2px solid var(--lime);
+  color: #f5ffe3;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+  font-size: clamp(26px, 7vw, 34px);
+  font-weight: 700;
+  line-height: 1.35;
+}
+#duel-loading-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.duel-loading .duel-spinner {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-width: 4px;
+}
