@@ -1,3 +1,4 @@
+import { mountArena } from "./arena-ui.js";
 import { drawPaddleGear, drawShot } from "./weapon-drawing.js";
 import { drawDrop } from "./drop-drawing.js";
 import { drawBrick } from "./brick-drawing.js";
@@ -715,11 +716,24 @@ settings();
 renderRecords();
 requestAnimationFrame(frame);
 
-mountMultiplayer({
+const duelUI = mountMultiplayer({
   onModeChange(active) {
     if (active) backgroundPause();
     onlineActive = active;
   },
   onUserGesture: audio,
   onSound: sound,
+});
+
+mountArena({
+  onEnter() {
+    duelUI.switchMode(false);
+    if (!$("duel-panel").hidden) return false;
+    backgroundPause();
+    onlineActive = true;
+    return true;
+  },
+  onExit() {
+    onlineActive = !$("duel-panel").hidden;
+  },
 });

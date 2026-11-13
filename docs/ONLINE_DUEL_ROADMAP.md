@@ -63,3 +63,13 @@ Public availability waits for reliability and deployment checks. Retain JavaScri
 modules, a separate DuelGame, authoritative server, private rooms, Pages, and Render Free.
 Run Solo regressions throughout; add simulation, real WebSocket, and UI tests alongside
 the corresponding behavior. Real-phone release validation belongs to Stage 10.
+
+## Additional three/four-player arena
+
+The [arena specification](ARENA_SPEC.md) adds an independent **3–4 Players** choice.
+It preserves the existing Solo campaign and two-player Duel. Implementation includes
+square physics/bricks, side paddles, three/four-seat rooms, readiness, lives/elimination,
+respawns, winners and a touch interface. Automated tests and real multi-page browser
+sessions cover both sizes. Deploy the backend and Pages together after pushing.
+Physical phones and real-network acceptance remain part of Stage 10; arena reconnect,
+power-ups, history and rematch are outside this initial addition.

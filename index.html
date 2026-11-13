@@ -29,6 +29,7 @@
         <nav class="mode-selector" aria-label="Game mode">
           <button id="solo-mode" aria-pressed="true">SOLO</button>
           <button id="online-mode" aria-pressed="false">ONLINE DUEL</button>
+          <button id="arena-mode" aria-pressed="false">3–4 PLAYERS</button>
         </nav>
         <div id="solo-panel" class="arcade-layout">
           <section class="cabinet" aria-label="Game cabinet">
@@ -80,6 +81,46 @@
           <button id="legend-button" aria-haspopup="dialog">? LEGEND</button>
           <button id="scores-button" aria-haspopup="dialog">★ SCORES</button>
         </nav>
+        <section
+          id="arena-panel"
+          class="arena-panel"
+          aria-label="Three or four player arena"
+          hidden
+        >
+          <h2>SQUARE ARENA</h2>
+          <p id="arena-status" role="status">Create or join a room.</p>
+          <p id="arena-loading" hidden>Connecting… please wait</p>
+          <div id="arena-setup">
+            <button id="arena-create3">CREATE · 3 PLAYERS</button>
+            <button id="arena-create4">CREATE · 4 PLAYERS</button>
+            <label for="arena-code">ARENA ROOM CODE</label>
+            <input
+              id="arena-code"
+              maxlength="6"
+              placeholder="ABC234"
+              autocomplete="off"
+            />
+            <button id="arena-join">JOIN ARENA</button>
+            <p>
+              Five lives each. Defend your coloured side. Last player standing
+              wins. The unused side is a wall in 3-player games.
+            </p>
+          </div>
+          <div class="arena-actions">
+            <button id="arena-ready" hidden>READY</button
+            ><button id="arena-leave" hidden>LEAVE ARENA</button>
+          </div>
+          <div id="arena-members" aria-label="Players"></div>
+          <canvas
+            id="arena-game"
+            width="800"
+            height="800"
+            aria-label="Square arena. Move along your labelled side by dragging. Arrow keys also move."
+            tabindex="0"
+            hidden
+          ></canvas>
+          <div id="arena-drag" hidden>↔ DRAG TO MOVE YOUR PADDLE</div>
+        </section>
         <section
           id="duel-panel"
           class="duel-panel"

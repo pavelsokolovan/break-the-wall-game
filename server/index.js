@@ -1,3 +1,4 @@
+import { ArenaRooms, parseArenaMessage } from "./arena-rooms.js";
 import { createServer } from "node:http";
 import { clientAddressResolver, lifecycleLogger } from "./operations.js";
 import { PROTOCOL_VERSION, SESSION_FEATURE } from "../shared/duel-rules.js";
@@ -42,6 +43,13 @@ export async function createDuelServer({
     if (!/^https?:\/\//.test(origin) || new URL(origin).origin !== origin)
       throw new TypeError("Origins must be exact HTTP origins");
   const manager = new RoomManager({ now, maxRooms, log });
+  const appRoomManager = manager;
+  const arenaManager = new ArenaRooms({
+    now,
+    maxRooms,
+    roomCount: () => manager.rooms.size,
+  });
+  arenaManager.attempts = manager.ipAttempts;
   let closing = false,
     closePromise;
   const server = createServer((request, response) => {
@@ -84,7 +92,7 @@ export async function createDuelServer({
   server.on("upgrade", (request, socket, head) => {
     const status = closing
       ? 503
-      : request.url !== "/ws"
+      : !["/ws", "/arena"].includes(request.url)
         ? 404
         : !allow.has(request.headers.origin)
           ? 403
@@ -100,6 +108,8 @@ export async function createDuelServer({
     });
   });
   wss.on("connection", (socket, request) => {
+    const arena = request.url === "/arena";
+    const manager = arena ? arenaManager : appRoomManager;
     manager.attach(socket, clientAddress(request));
     log("connection_open", { connections: wss.clients.size });
     socket.on("error", () => {});
@@ -110,6 +120,7 @@ export async function createDuelServer({
     socket.on("message", (data, binary) => {
       const c = manager.connections.get(socket);
       if (!c || closing) return;
+      appRoomManager.maxRooms = Math.max(0, maxRooms - arenaManager.rooms.size);
       if (!c.bucket.take(manager.now())) {
         error(socket, "RATE_LIMITED", "Too many messages.");
         socket.close(1008, "Rate limit");
@@ -117,7 +128,7 @@ export async function createDuelServer({
       }
       const parsed = binary
         ? { ok: false, code: "BAD_MESSAGE", message: "Use JSON text messages." }
-        : parseClientMessage(data.toString());
+        : (arena ? parseArenaMessage : parseClientMessage)(data.toString());
       if (!parsed.ok) {
         error(socket, parsed.code, parsed.message);
         return;
@@ -130,10 +141,14 @@ export async function createDuelServer({
     });
   });
   const scheduler = autoSchedule
-    ? setInterval(() => manager.advance(), 1000 / 120)
+    ? setInterval(() => {
+        manager.advance();
+        arenaManager.advance();
+      }, 1000 / 120)
     : null;
   const heartbeat = setInterval(() => {
     manager.maintenance(manager.now());
+    arenaManager.maintenance(arenaManager.now());
     for (const socket of wss.clients)
       if (socket.readyState === 1) socket.ping();
   }, 10000);
@@ -155,6 +170,7 @@ export async function createDuelServer({
     server,
     wss,
     manager,
+    arenaManager,
     port: server.address().port,
     close() {
       if (closePromise) return closePromise;
@@ -164,6 +180,7 @@ export async function createDuelServer({
         clearInterval(heartbeat);
         log("server_stopping");
         manager.close();
+        arenaManager.close();
         const force = setTimeout(() => {
           for (const socket of wss.clients) socket.terminate();
           server.closeAllConnections();

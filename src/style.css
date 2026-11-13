@@ -1652,3 +1652,93 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
   height: 3px;
   opacity: 0.7;
 }
+
+.arena-panel {
+  max-width: 900px;
+  margin: auto;
+  text-align: center;
+}
+.arena-panel h2 {
+  font-size: 16px;
+  margin: 8px;
+}
+#arena-status {
+  font:
+    22px "VT323",
+    monospace;
+  min-height: 28px;
+  margin: 6px;
+}
+#arena-setup {
+  max-width: 460px;
+  margin: auto;
+  display: grid;
+  gap: 12px;
+}
+#arena-setup[hidden],
+#arena-game[hidden],
+#arena-drag[hidden],
+#arena-loading[hidden] {
+  display: none;
+}
+#arena-setup button {
+  min-height: 48px;
+}
+#arena-code {
+  padding: 10px;
+  font:
+    26px "VT323",
+    monospace;
+  text-transform: uppercase;
+  width: 100%;
+  color: var(--lime);
+  background: #151526;
+  border: 1px solid var(--border);
+}
+#arena-setup p {
+  font:
+    20px "VT323",
+    monospace;
+}
+.arena-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+#arena-members {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  font:
+    16px "VT323",
+    monospace;
+  padding: 4px;
+  min-height: 24px;
+}
+#arena-game {
+  display: block;
+  margin: auto;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  touch-action: none;
+  image-rendering: pixelated;
+}
+#arena-drag {
+  height: 52px;
+  touch-action: none;
+  align-content: center;
+  margin: auto;
+  font:
+    16px "VT323",
+    monospace;
+}
+#arena-loading {
+  color: var(--lime);
+  font:
+    24px "VT323",
+    monospace;
+}
+.mode-selector {
+  flex-wrap: wrap;
+}

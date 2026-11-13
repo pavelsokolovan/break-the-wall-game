@@ -695,9 +695,94 @@ try {
   );
   await until(a, "document.getElementById('duel-game').hidden");
   assert(!app.manager.rooms.has(practiceRoom.code));
+  // Additional square-arena mode uses independent three/four-seat rooms.
+  const arenaPages = [a, b, await page(), await page()];
+  for (const p of arenaPages)
+    await command(
+      "Emulation.setDeviceMetricsOverride",
+      { width: 390, height: 844, deviceScaleFactor: 1, mobile: true },
+      p,
+    );
+  for (const count of [3, 4]) {
+    app.manager.ipAttempts.clear(); // Separate test scenarios share one loopback IP.
+    for (const p of arenaPages.slice(0, count))
+      await evaluate(p, "document.getElementById('arena-mode').click()");
+    await evaluate(
+      a,
+      `document.getElementById('arena-create${count}').click()`,
+    );
+    await until(
+      a,
+      "document.getElementById('arena-status').textContent.includes('Room ')",
+    );
+    const arenaRoom = [...app.arenaManager.rooms.values()].find(
+      (r) => r.count === count,
+    );
+    assert(arenaRoom);
+    for (const p of arenaPages.slice(1, count)) {
+      await evaluate(
+        p,
+        `document.getElementById('arena-code').value=${JSON.stringify(arenaRoom.code)};document.getElementById('arena-join').click()`,
+      );
+      await until(
+        p,
+        "document.getElementById('arena-status').textContent.includes('Room ')||document.getElementById('arena-status').textContent.includes('All players')",
+      );
+    }
+    for (const p of arenaPages.slice(0, count)) {
+      await until(p, "!document.getElementById('arena-ready').disabled");
+      await evaluate(p, "document.getElementById('arena-ready').click()");
+    }
+    await until(
+      a,
+      "document.getElementById('arena-status').textContent.includes('You defend')",
+    );
+    assert.equal(arenaRoom.game.balls.length, count);
+    assert(
+      await evaluate(
+        a,
+        `(()=>{const r=document.getElementById('arena-game').getBoundingClientRect();return Math.abs(r.width-r.height)<1&&r.width>=320&&r.right<=innerWidth;})()`,
+      ),
+      "Arena must remain square and usable on a phone",
+    );
+    for (const [slot, p] of arenaPages.slice(0, count).entries()) {
+      await evaluate(
+        p,
+        `(()=>{const c=document.getElementById('arena-game'),r=c.getBoundingClientRect();c.dispatchEvent(new PointerEvent('pointermove',{pointerType:'mouse',clientX:r.left+r.width*.6,clientY:r.top+r.height*.6}));})()`,
+      );
+    }
+    await wait(150);
+    assert(arenaRoom.game.players.every((p) => Math.abs(p.t - 480) < 1));
+    await command("Page.bringToFront", {}, a);
+    const arenaShot = await command(
+      "Page.captureScreenshot",
+      { format: "png" },
+      a,
+    );
+    await writeFile(
+      `/tmp/brickfall-arena-${count}.png`,
+      Buffer.from(arenaShot.data, "base64"),
+    );
+    for (const p of arenaPages.slice(0, count - 1))
+      await evaluate(
+        p,
+        "window.confirm=()=>true;document.getElementById('arena-leave').click()",
+      );
+    await until(
+      arenaPages[count - 1],
+      "document.getElementById('arena-status').textContent.includes('YOU WIN')",
+    );
+    await evaluate(
+      arenaPages[count - 1],
+      "document.getElementById('arena-leave').click()",
+    );
+    assert(!app.arenaManager.rooms.has(arenaRoom.code));
+    for (const p of arenaPages.slice(0, count))
+      await evaluate(p, "document.getElementById('solo-mode').click()");
+  }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; real 3/4-page square arenas; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",
