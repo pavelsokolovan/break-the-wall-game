@@ -42,3 +42,20 @@ visibility and loading state. Portrait overlay screenshot was inspected locally.
 Verified locally: 198 automated tests, syntax checks, production base-path build and
 Chromium two-player/bot smoke pass. The browser geometry check passed with the bonus
 bar inside the field. No push or deployment was performed for this change.
+
+## Five-pixel end margin and lighter indicators
+
+Duel's ball/paddle collision half-width now includes paddleCollisionPadding=5 logical
+game pixels on each side. This applies to the swept front/corner test and direct-body
+overlap. Visible paddle width, field clamping, drop/hazard catches and sticky attachment
+remain based on the visible width; Solo is unchanged. Bounce aiming still uses the visible
+width and existing angle cap. This is a small edge-forgiveness margin, not arbitrary
+network rewind or retroactive goal recovery.
+
+Bonus indicators shrink from 14px to 13px text with smaller padding, 3px timer strips,
+70% overall opacity and a lighter translucent background/border. Their in-field position
+and touch-through/no-layout-space behavior are unchanged.
+
+Boundary tests cover both ends of both paddles, normal/narrow/wide widths, stationary
+and direct jump cases, inside-margin catches and outside-margin misses. The full suite
+passes 199 tests; syntax/build and Chromium session smoke also pass.

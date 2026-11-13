@@ -759,7 +759,7 @@ export class DuelGame {
             slot === 0 ? b.y : R.height - b.y,
             sign * (dx - p.vx * remaining),
             sign * dy,
-            p.width / 2,
+            p.width / 2 + R.paddleCollisionPadding,
             b.r,
             R.paddleTopY[0],
             this.directContactSlots?.has(slot) ?? false,

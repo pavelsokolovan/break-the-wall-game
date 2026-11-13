@@ -660,3 +660,52 @@ test("direct placement cannot rescue a ball clear of the paddle or one already s
     assert.equal(g.state.goals[1 - slot], 1);
   }
 });
+
+test("invisible five-pixel ends catch near-edge balls symmetrically without widening visible paddles", () => {
+  for (const slot of [0, 1])
+    for (const edge of [-1, 1])
+      for (const width of [100, 160, 240])
+        for (const outside of [false, true])
+          for (const direct of [false, true]) {
+            const g = playing(),
+              p = g.state.players[slot],
+              sign = slot === 0 ? 1 : -1;
+            p.damage = width === 100 ? 3 : 0;
+            p.wideRemainingMs = width === 240 ? 12000 : 0;
+            g.updatePaddleWidth(p);
+            const visibleWidth = p.width,
+              face =
+                slot === 0 ? R.paddleTopY[0] : R.paddleTopY[1] + R.paddleHeight;
+            const distance =
+              visibleWidth / 2 +
+              R.paddleCollisionPadding +
+              R.ballRadius +
+              (outside ? 1 : -1);
+            g.state.balls = [
+              ball(g, {
+                x: p.x + edge * distance,
+                y: face - sign,
+                vy: sign * 360,
+                vx: 0,
+                owner: 1 - slot,
+              }),
+            ];
+            if (direct) {
+              p.x = 200;
+              p.targetX = 200;
+              g.applyInput(slot, {
+                seq: 1,
+                x: 0.5,
+                direct: true,
+                action: "none",
+              });
+            }
+            g.step();
+            assert.equal(p.width, visibleWidth);
+            assert.equal(g.getState().players[slot].width, visibleWidth);
+            assert.equal(
+              Math.sign(g.state.balls[0].vy),
+              outside ? sign : -sign,
+            );
+          }
+});

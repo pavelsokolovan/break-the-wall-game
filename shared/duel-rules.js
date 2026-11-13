@@ -4,6 +4,7 @@ export const DUEL_RULES = Object.freeze({
   height: 1000,
   paddleTopY: Object.freeze([918, 64]),
   paddleHeight: 18,
+  paddleCollisionPadding: 5,
   initialCenterX: 400,
   initialPaddleWidth: 160,
   damageWidthDecrement: 20,
