@@ -1374,3 +1374,86 @@ body:has(#duel-panel:not([hidden])) #duel-ready {
     border-style: dotted;
   }
 }
+
+.duel-result {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  background: #050510dd;
+  padding: 16px;
+}
+.duel-result[hidden] {
+  display: none;
+}
+.duel-result-card {
+  width: min(100%, 440px);
+  max-height: 90dvh;
+  overflow: auto;
+  padding: 28px 20px;
+  background: #121222;
+  border: 3px solid var(--lime);
+  box-shadow: 0 12px 0 #050510;
+  text-align: center;
+}
+.duel-result-kicker {
+  font:
+    24px "VT323",
+    monospace;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+#duel-result-title {
+  font-size: clamp(24px, 6vw, 36px);
+  line-height: 1.4;
+  color: var(--lime);
+  margin: 12px 0;
+}
+#duel-result-score {
+  font:
+    48px "VT323",
+    monospace;
+  margin: 12px 0;
+}
+#duel-result-note {
+  font:
+    22px "VT323",
+    monospace;
+  min-height: 28px;
+  margin: 12px 0 20px;
+}
+body:has(#duel-panel:not([hidden])) .duel-result-card button {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px;
+  margin-top: 12px;
+  font-size: 16px;
+}
+@media (max-height: 500px) {
+  .duel-result-card {
+    padding: 12px 20px;
+  }
+  #duel-result-title {
+    margin: 4px;
+    font-size: 24px;
+  }
+  #duel-result-score {
+    margin: 4px;
+    font-size: 32px;
+  }
+  #duel-result-note {
+    margin: 4px;
+  }
+  .duel-result-kicker {
+    margin: 0;
+    font-size: 18px;
+  }
+  body:has(#duel-panel:not([hidden])) .duel-result-card button {
+    min-height: 44px;
+    padding: 10px;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+}

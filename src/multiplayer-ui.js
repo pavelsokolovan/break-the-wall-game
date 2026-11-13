@@ -77,6 +77,8 @@ export function mountMultiplayer({
     waitingControl = null;
   }
   function sendControl(message, label) {
+    if (waitingControl?.type === "resume_play" && message.type === "pause")
+      clearControlWait();
     if (waitingControl || client.recovering || client.socket?.readyState !== 1)
       return;
     waitingControl = {
@@ -142,6 +144,34 @@ export function mountMultiplayer({
     $("duel-rematch").textContent = room?.players[client.slot]?.rematchReady
       ? "CANCEL REMATCH"
       : "REMATCH";
+    $("duel-result").hidden = !result || !active;
+    $("duel-result-rematch").disabled = $("duel-rematch").disabled;
+    $("duel-result-rematch").textContent = $("duel-rematch").textContent;
+    $("duel-result-leave").disabled = leaving;
+    if (result) {
+      const slot = client.slot ?? viewSlot;
+      $("duel-result-title").textContent =
+        result.winner === null
+          ? "DRAW"
+          : result.winner === slot
+            ? "YOU WIN!"
+            : "YOU LOSE";
+      $("duel-result-score").textContent =
+        `${result.goals[slot]} – ${result.goals[1 - slot]}`;
+      $("duel-result-note").textContent = waitingControl
+        ? waitingControl.label
+        : !connected
+          ? "Connection lost. Leave to start again."
+          : room?.players[slot]?.rematchReady
+            ? "Waiting for your opponent…"
+            : !room?.players.every((p) => p.connected)
+              ? "Your opponent has left the room."
+              : result.reason === "time_limit"
+                ? "Time is up. Play again?"
+                : result.reason === "forfeit"
+                  ? "Match ended by forfeit. Play again?"
+                  : "Play again?";
+    }
   }
   const client = clientFactory({
     now,
@@ -299,11 +329,13 @@ export function mountMultiplayer({
         if (!room?.practice) history.save(message, client.slot ?? viewSlot);
         if (result?.matchId === message.matchId) return;
         result = message;
+        closePanel(false);
         status(
           `${message.winner === null ? "DRAW" : message.winner === client.slot ? "YOU WIN" : "OPPONENT WINS"} · ${message.goals[client.slot]}–${message.goals[1 - client.slot]} · ${message.reason.replaceAll("_", " ")} · Rematch or leave room`,
         );
         $("duel-action").disabled = true;
         controls();
+        if (active && !leaving) $("duel-result-rematch").focus();
         resolveLeave?.();
       }
       if (message.type === "error") {
@@ -863,6 +895,18 @@ export function mountMultiplayer({
       "Confirming rematch…",
     );
   };
+  $("duel-result-rematch").onclick = () => $("duel-rematch").click();
+  $("duel-result-leave").onclick = () => $("duel-leave").click();
+  $("duel-result").addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const rematch = $("duel-result-rematch"),
+      leaveButton = $("duel-result-leave");
+    (doc.activeElement === rematch || rematch.disabled
+      ? leaveButton
+      : rematch
+    ).focus();
+  });
   $("duel-share").onclick = async () => {
     if (!room) return;
     const link = invitationUrl(win.location, room.code);

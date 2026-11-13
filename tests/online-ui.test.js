@@ -1098,3 +1098,41 @@ test("loading indicator covers room requests and clears after server response or
   });
   assert(f.$("duel-loading").hidden);
 });
+
+test("centered result announces win/loss/draw and offers working rematch and leave actions", async (t) => {
+  for (const winner of [0, 1, null]) {
+    const f = fixture(t),
+      socket = await f.join();
+    socket.receive(snapshot());
+    socket.receive({
+      type: "result",
+      matchId: "m",
+      winner,
+      reason: "five_goals",
+      goals: [5, 3],
+      points: [100, 20],
+      durationMs: 1000,
+      waveCount: 1,
+    });
+    assert(!f.$("duel-result").hidden);
+    assert.match(
+      f.$("duel-result-title").textContent,
+      winner === null ? /DRAW/ : winner === 0 ? /YOU WIN/ : /YOU LOSE/,
+    );
+    assert.equal(f.$("duel-result-score").textContent, "5 – 3");
+    assert.equal(f.doc.activeElement, f.$("duel-result-rematch"));
+    f.$("duel-result-rematch").click();
+    assert.equal(socket.sent.at(-1).type, "rematch");
+    const consent = room();
+    consent.phase = "finished";
+    consent.players[0].rematchReady = true;
+    socket.receive(consent);
+    assert.match(
+      f.$("duel-result-note").textContent,
+      /Waiting for your opponent/,
+    );
+    f.$("duel-result-leave").click();
+    await turn();
+    assert(f.$("duel-result").hidden);
+  }
+});
