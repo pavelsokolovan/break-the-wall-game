@@ -185,7 +185,7 @@ test("remote positions interpolate 100ms behind, use latest discrete state and n
   assert.equal(b.state.balls[0].x, 150);
 });
 test("phase/goal/wave and owner/held/ID changes prevent interpolation across discontinuities", () => {
-  for (const change of ["phase", "goal", "wave", "owner", "held", "id"]) {
+  for (const change of ["phase", "owner", "held", "id"]) {
     const sync = new DuelSync(),
       a = snapshot(),
       b = snapshot(1050);
@@ -454,8 +454,37 @@ test("contact presentation pairs confirmed ball and paddle despite input predict
     sync.push(s, 1100, slot);
     sync.setTarget(slot === 0 ? 0.9 : 0.1, 1100);
     const out = sync.frame(1140).snapshot;
-    assert.equal(out.state.players[slot].x, 200);
+    assert(out.state.players[slot].x > 200);
     assert.equal(out.state.balls[0].x, 600);
     assert.equal(out.state.balls[0].y, b.y);
   }
+});
+
+test("stationary finger target never recoils on delayed snapshots, goals or nearby balls", () => {
+  const sync = new DuelSync({
+    authoritativeContact: true,
+    interpolationMs: 50,
+    correctionMs: 40,
+  });
+  const first = snapshot(1000);
+  first.state.players[0].x = 200;
+  sync.push(first, 1000, 0);
+  sync.setTarget(0.8, 1000);
+  let previous = 200;
+  for (let frame = 1; frame <= 100; frame++) {
+    const time = 1000 + frame * 16;
+    if (frame % 3 === 0) {
+      const late = snapshot(time - 100);
+      late.tick += frame;
+      late.state.players[0].x = 200;
+      late.state.goals[1] = frame >= 30 ? 1 : 0;
+      Object.assign(late.state.balls[0], { x: 600, y: 910, vy: 360 });
+      sync.push(late, time, 0);
+    }
+    const x = sync.frame(time).snapshot.state.players[0].x;
+    assert(x >= previous - 1e-6);
+    assert(x <= 640 + 1e-6);
+    previous = x;
+  }
+  near(previous, 640);
 });

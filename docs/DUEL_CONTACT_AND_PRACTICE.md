@@ -56,3 +56,8 @@ rather than silently create an ordinary two-human room.
 - Two-page Chromium session smoke extended with single-page server bot practice,
   bot movement, pause/resume and leave cleanup; screenshot `/tmp/brickfall-practice.png`.
 - No claim of physical-phone or real-internet latency acceptance from local automation.
+
+Update: the local-paddle authority override described above caused snap-back against
+finger prediction and has been removed. See DUEL_CONTINUOUS_PLAY.md for the current
+stable target rendering and independent respawn rules. The front-overlap physics fix
+and bot practice remain active.

@@ -31,3 +31,6 @@ start/remaining-ball continuity/equalization tests, real-socket rounds and exist
 regressions. Syntax checks, production base-path build and the two-page Chromium smoke
 pass. The browser checks include points-only legacy pickups, powers, recovery, rematch,
 mobile layouts and Solo. No deployment was performed for this change.
+
+Superseded for current play by [continuous two-ball rules](DUEL_CONTINUOUS_PLAY.md):
+lost balls now respawn independently and the other ball continues immediately.

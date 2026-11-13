@@ -1015,7 +1015,7 @@ test(
     f.setClock(room.manual.deadline);
     f.app.manager.maintenance(f.app.manager.now());
     assert.equal(room.manual, null);
-    assert.equal(game.phase, "goal_countdown");
+    assert.equal(game.phase, "playing");
   },
 );
 
@@ -1271,5 +1271,47 @@ test(
     a.send({ type: "leave" });
     await a.next("result");
     assert(!f.app.manager.rooms.has(welcome.code));
+  },
+);
+
+test(
+  "a lost ball respawns independently and its auto-launch timer freezes during pause",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const room = f.app.manager.rooms.get(code),
+      game = room.game;
+    const [lost, other] = game.state.balls;
+    Object.assign(lost, { y: 1011, vy: 360 });
+    Object.assign(other, { x: 100, y: 200, vx: 0, vy: 0 });
+    game.state.players[1].ammo = 5;
+    await f.advance(1);
+    assert.equal(game.phase, "playing");
+    assert.equal(game.state.balls.length, 2);
+    assert.equal(game.state.players[1].ammo, 5);
+    const replacement = game.state.balls.find((ball) => ball.id !== other.id);
+    assert(replacement.held);
+    assert.equal(replacement.owner, 0);
+    assert.equal(game.state.balls.find((ball) => ball.id === other.id).y, 200);
+    a.send({ type: "pause", requested: true });
+    await a.next("snapshot", (s) => s.phase === "paused");
+    const remaining = replacement.autoReleaseRemainingMs;
+    await f.advance(120);
+    assert.equal(replacement.autoReleaseRemainingMs, remaining);
+    a.send({ type: "resume_play" });
+    b.send({ type: "resume_play" });
+    await a.next(
+      "snapshot",
+      (s) => s.phase === "playing" && s.tick >= game.tick,
+    );
+    await f.advance(60);
+    assert(!replacement.held);
+    assert(replacement.vy < 0);
+    assert.equal(game.state.balls.length, 2);
   },
 );

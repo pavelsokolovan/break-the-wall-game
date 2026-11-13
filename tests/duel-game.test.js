@@ -76,45 +76,24 @@ test("configuration validation and start are safe and one-shot", () => {
   assert(!g.start());
   assert.equal(g.tick, 0);
 });
-test("exact initial and goal countdowns automatically serve from either end", () => {
-  const servers = new Set();
-  for (let seed = 0; seed < 10; seed++) {
-    const g = new DuelGame({ seed, matchId: "m" });
-    g.start();
-    const slot = g.state.servingSlot;
-    servers.add(slot);
-    assert(!g.applyInput(slot, { seq: 1, x: 1, action: "fire" }));
-    ticks(g, 179);
-    assert.equal(g.phase, "countdown");
-    assert.equal(g.state.balls.length, 0);
-    g.step();
-    assert.equal(g.phase, "playing");
-    assert.equal(g.tick, 180);
-    assert.equal(g.state.activeDurationMs, 0);
-    assert.equal(g.state.countdownRemainingMs, 0);
-    const b = g.state.balls[0],
-      viewV = worldToViewVelocity(slot, b),
-      viewP = worldToViewPoint(slot, b);
-    assert.equal(b.owner, slot);
-    assert.equal(viewP.y, 907);
-    assert.equal(b.x, 400);
-    near(Math.atan2(viewV.vx, -viewV.vy), Math.PI / 12);
-    near(Math.hypot(b.vx, b.vy), 360);
-    const id = b.id;
-    goal(g, 1 - slot);
-    assert.equal(g.state.servingSlot, slot);
-    ticks(g, 119);
-    assert.equal(g.phase, "goal_countdown");
-    assert.equal(g.state.balls.length, 0);
-    g.step();
-    assert.equal(g.phase, "playing");
-    assert(g.state.balls[0].id > id);
-    const nextV = worldToViewVelocity(slot, g.state.balls[0]);
-    near(Math.atan2(nextV.vx, -nextV.vy), -Math.PI / 12);
-    near(Math.hypot(nextV.vx, nextV.vy), 360 * 1.12);
-    validate(g);
-  }
-  assert.deepEqual([...servers].sort(), [0, 1]);
+test("initial countdown serves two balls and each loss respawns at the conceding paddle", () => {
+  const g = playing();
+  assert.equal(g.state.balls.length, 2);
+  const [lost, other] = g.state.balls;
+  Object.assign(lost, { y: 1011, vy: 360 });
+  Object.assign(other, { x: 100, y: 200, vx: 0, vy: 0 });
+  g.step();
+  assert.equal(g.phase, "playing");
+  assert.equal(g.state.balls.length, 2);
+  assert.equal(g.state.balls.find((b) => b.id === other.id).y, 200);
+  const replacement = g.state.balls.find((b) => b.id !== other.id);
+  assert(replacement.held);
+  assert.equal(replacement.owner, 0);
+  ticks(g, 59);
+  assert(replacement.held);
+  g.step();
+  assert(!replacement.held);
+  assert(replacement.vy < 0);
 });
 test("view inputs are sequenced, latest-target-only, clamped and speed-limited", () => {
   const g = playing();
@@ -274,7 +253,7 @@ test("ball must fully exit; each ball scores once, opposite exits both count ind
     assert.equal(g.state.goals[scorer], 3);
     assert.equal(g.state.players[1 - scorer].damage, 3);
     assert.equal(g.state.servingSlot, 1 - scorer);
-    assert.equal(g.state.balls.length, 0);
+    assert.equal(g.state.balls.length, 3);
     assert.equal(g.drainEvents().filter((e) => e.type === "goal").length, 3);
   }
   for (const reverse of [false, true]) {
@@ -291,11 +270,11 @@ test("ball must fully exit; each ball scores once, opposite exits both count ind
       g.state.players.map((p) => p.damage),
       [1, 1],
     );
-    assert.equal(g.phase, "goal_countdown");
-    assert.equal(g.state.balls.length, 0);
+    assert.equal(g.phase, "playing");
+    assert.equal(g.state.balls.length, 2);
     assert.deepEqual(
       g.drainEvents().map((e) => e.type),
-      ["goal", "goal"],
+      ["goal", "goal", "serve", "serve"],
     );
   }
 });
@@ -339,6 +318,7 @@ test("rally reset clears transient state while preserving damage, points and wal
   });
   g.state.shots.push({ id: g.nextEntityId++, owner: 0, x: 100, y: 300 });
   goal(g, 1);
+  g.resetRally();
   assert.equal(p.damage, 3);
   assert.equal(p.width, 100);
   assert.equal(p.points, 500);
@@ -363,6 +343,7 @@ test("rally reset clears transient state while preserving damage, points and wal
   assert.equal(g.state.shots.length, 0);
   ticks(g, 120);
   goal(g, 1);
+  g.resetRally();
   assert.equal(p.damage, 3);
   assert.equal(p.width, 100);
   validate(g);
@@ -372,7 +353,6 @@ test("five goals produce exactly one terminal result, which remains immutable th
     const g = playing();
     g.state.players[winner].points = 1234;
     for (let i = 0; i < 5; i++) {
-      if (i) ticks(g, 120);
       goal(g, winner);
     }
     assert.equal(g.phase, "finished");
@@ -427,6 +407,7 @@ test("pause freezes ticks, countdowns and timers, discarding targets and paused 
   assert.equal(g.state.players[0].vx, 0);
   assert.equal(g.state.players[0].lastAckInputSeq, 1);
   goal(g, 0);
+  g.beginCountdown("goal_countdown", 2000);
   ticks(g, 60);
   assert(g.setPaused(true));
   ticks(g, 200);
@@ -485,8 +466,8 @@ test("long automatic-paddle run stays finite, clamped and protocol-valid", () =>
     }
     if (i % 1000 === 0) validate(g);
   }
-  assert(g.tick >= 10000);
-  assert(g.state.activeDurationMs > 100000);
+  assert(g.tick >= 10000 || g.getResult());
+  assert(g.state.activeDurationMs > 100000 || g.getResult());
 });
 
 test("both aiming edges obey the angle cap and ownership controls speed on return", () => {
@@ -538,7 +519,7 @@ test("opposite exits at different microsteps each award one goal", () => {
     assert.deepEqual(g.state.goals, [1, 1]);
     assert.deepEqual(
       g.drainEvents().map((e) => e.type),
-      ["goal", "goal"],
+      ["goal", "goal", "serve", "serve"],
     );
   }
 });
@@ -571,47 +552,14 @@ test("active-time limit ends by goals, ignores points, excludes pauses and freez
   assert.equal(g.state.activeDurationMs, 0);
 });
 
-test("paired rounds start with opposite owners and preserve the second ball after a goal", () => {
+test("fifth goal ends immediately even with the other ball still active", () => {
   const g = playing();
-  assert.equal(g.state.balls.length, 2);
-  assert.deepEqual(new Set(g.state.balls.map((b) => b.owner)), new Set([0, 1]));
-  assert(g.state.balls.find((b) => b.owner === 0).vy < 0);
-  assert(g.state.balls.find((b) => b.owner === 1).vy > 0);
-  const [scored, remaining] = g.state.balls;
-  Object.assign(scored, { y: -11, vy: -360 });
-  Object.assign(remaining, { x: 100, y: 200, vx: 0, vy: 0 });
-  g.state.players[1].ammo = 5;
-  g.step();
-  assert.deepEqual(g.state.goals, [1, 0]);
-  assert.equal(g.phase, "playing");
-  assert.equal(g.state.balls.length, 1);
-  assert.equal(g.state.balls[0].id, remaining.id);
-  assert.equal(g.state.players[1].ammo, 5);
-  Object.assign(remaining, { y: 1011, vy: 360 });
-  g.step();
-  assert.deepEqual(g.state.goals, [1, 1]);
-  assert.equal(g.phase, "goal_countdown");
-  ticks(g, 120);
-  assert.equal(g.state.balls.length, 2);
-});
-test("second ball can equalize at five; a later unequal completed round decides the winner", () => {
-  const g = playing();
-  g.state.goals = [4, 4];
+  g.state.goals = [4, 2];
   Object.assign(g.state.balls[0], { y: -11, vy: -360 });
-  Object.assign(g.state.balls[1], { x: 100, y: 200, vx: 0, vy: 0 });
   g.step();
-  assert.equal(g.getResult(), null);
-  Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
-  g.step();
-  assert.deepEqual(g.state.goals, [5, 5]);
-  assert.equal(g.getResult(), null);
-  ticks(g, 120);
-  for (const b of g.state.balls) Object.assign(b, { y: -11, vy: -360 });
-  g.step();
-  assert.deepEqual(g.getResult().goals, [7, 5]);
   assert.equal(g.getResult().winner, 0);
+  assert.equal(g.phase, "finished");
 });
-
 test("approaching front-edge overlap is caught at either paddle; backside overlap is never rescued", () => {
   for (const slot of [0, 1])
     for (const behind of [false, true]) {

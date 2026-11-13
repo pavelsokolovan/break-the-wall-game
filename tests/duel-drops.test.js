@@ -432,7 +432,7 @@ test("wide pickup expands same-tick hazard coverage after beneficial catches", (
   assert.equal(g.state.players[0].wideRemainingMs, 12000);
   assert.equal(g.state.drops.length, 0);
 });
-test("goal suppresses hazard damage/armor use while keeping pickup points and Repair-before-goal", () => {
+test("continuous goals preserve ordinary armor and pickup processing", () => {
   const g = game(),
     p = g.state.players[0];
   p.shieldCharges = 1;
@@ -447,11 +447,7 @@ test("goal suppresses hazard damage/armor use while keeping pickup points and Re
   assert.equal(p.invulnerabilityRemainingMs, 0);
   assert.equal(g.state.goals[1], 1);
   const events = validate(g);
-  assert(
-    !events.some(
-      (e) => e.type === "hazard_damage" || e.type === "hazard_blocked",
-    ),
-  );
+  assert(events.some((e) => e.type === "hazard_blocked"));
   assert.equal(g.state.drops.length, 0);
 });
 test("countdown and pause freeze all powers and drop motion; wave guards honor actual hazard sizes", () => {

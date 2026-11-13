@@ -642,6 +642,7 @@ export function mountMultiplayer({
       );
       canvas.style.width = `${Math.floor(width)}px`;
       canvas.style.height = `${Math.floor((width * R.height) / R.width)}px`;
+      $("duel-drag-area").style.width = canvas.style.width;
       const stale = !result && now() - receivedAt > 250;
       if (panel || doc.hidden || leaving) inactive();
       if (stale) {
@@ -750,7 +751,7 @@ export function mountMultiplayer({
       body.append(list);
     } else
       body.textContent =
-        "First to five goals; brick points do not break ties. Matches end after 15 minutes of active play. Move with drag, mouse, arrows or A/D. Tap your paddle or Space to release held balls and fire; F fires only. Sticky holds for three seconds; bazooka stores up to fifteen shots; each round starts with two balls. Returning a ball captures it. Both balls score once before the next round; equal goals at five continue to a deciding round. Multiball is replaced by gems. Gems give points; Wide and Slow help returns; Repair fixes damage. Shield and Vest stop hazards, never goals. Your drops travel toward you. Pause, panels and background share one 30-second pause per player per rally. Both players must consent to resume, or the timer expires. Panels do not stop play after the pause budget expires.";
+        "First to five goals; brick points do not break ties. Matches end after 15 minutes of active play. Move with drag, mouse, arrows or A/D. Tap your paddle or Space to release held balls and fire; F fires only. Sticky holds for three seconds; bazooka stores up to fifteen shots; two balls stay in play. Returning a ball captures it. A lost ball returns to the conceding paddle and launches after one second, or tap to release sooner. The other ball keeps moving. First to five with a lead wins; simultaneous tied goals continue. Multiball is replaced by gems. Gems give points; Wide and Slow help returns; Repair fixes damage. Shield and Vest stop hazards, never goals. Your drops travel toward you. Pause, panels and background share one 30-second pause per player per rally. Both players must consent to resume, or the timer expires. Panels do not stop play after the pause budget expires.";
     $("duel-info").hidden = false;
     $("duel-info-close").focus();
     controls();

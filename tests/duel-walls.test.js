@@ -454,9 +454,6 @@ test("pause/countdown freezes pending replacement and a goal on its due tick win
   assert.equal(g.pendingWall.ticks, 1);
   assert.equal(g.state.players[0].damage, 1);
   ticks(g, 120);
-  assert.equal(g.pendingWall.ticks, 1);
-  assert.equal(g.state.wave, 1);
-  g.step();
   assert.equal(g.state.wave, 2);
   assert.equal(g.state.players[0].damage, 0);
   validate(g);
@@ -477,10 +474,12 @@ test("last-brick/goal and last-brick/victory ties keep points but cannot repair 
     assert.equal(g.state.wave, 1);
     assert.equal(g.pendingWall, null);
     assert.equal(g.state.goals[1], terminal ? 5 : 1);
-    assert.equal(g.phase, "playing");
-    Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
-    g.step();
-    assert.equal(g.phase, terminal ? "finished" : "goal_countdown");
+    assert.equal(g.phase, terminal ? "finished" : "playing");
+    if (!terminal) {
+      Object.assign(g.state.balls[0], { y: 1011, vy: 360 });
+      g.step();
+    }
+    assert.equal(g.phase, terminal ? "finished" : "playing");
     if (terminal) {
       assert.equal(g.getResult().winner, 1);
       assert.equal(g.getResult().points[0], 100);

@@ -466,36 +466,21 @@ test("wave repair preserves ammo/held/charges and live shots; correct shot bound
     h: 27,
   });
 });
-test("any goal, including terminal goal with a last-brick shot, clears all weapons and held balls", () => {
-  for (const terminal of [false, true]) {
-    const g = game(),
-      target = brick(g);
-    g.state.bricks = [target];
-    g.state.goals[1] = terminal ? 4 : 0;
-    g.state.balls = [held(g, 0), ball(g, { y: 1011, vy: 360 })];
-    g.followHeldBalls();
-    g.state.players[0].ammo = 5;
-    g.state.players[0].stickyCharges = 2;
-    g.state.shots = [shot(g, 0, { y: 548 })];
-    g.step();
-    assert.equal(g.state.goals[1], terminal ? 5 : 1);
-    assert.equal(g.state.players[0].points, 100);
-    assert.equal(g.phase, "playing");
-    assert.equal(g.state.balls.length, 1);
-    Object.assign(g.state.balls[0], { held: false, y: 1011, vy: 360 });
-    g.step();
-    assert.equal(g.state.balls.length, 0);
-    assert.equal(g.state.shots.length, 0);
-    assert.equal(g.state.players[0].ammo, 0);
-    assert.equal(g.state.players[0].stickyCharges, 0);
-    assert.equal(g.state.players[0].fireCooldownMs, 0);
-    assert(g.pendingActions.every((p) => !p.fire && !p.release));
-    if (terminal) {
-      assert.equal(g.getResult().points[0], 100);
-      assert.equal(g.getResult().winner, 1);
-    }
-    validate(g);
-  }
+test("nonterminal loss preserves weapons and other held balls", () => {
+  const g = game();
+  g.state.balls = [held(g, 0), ball(g, { y: 1011, vy: 360 })];
+  g.state.players[0].ammo = 5;
+  g.step();
+  assert.equal(g.phase, "playing");
+  assert.equal(g.state.balls.length, 2);
+  assert.equal(g.state.players[0].ammo, 5);
+  assert(g.state.balls.every((b) => b.held));
+  g.state.goals[1] = 4;
+  Object.assign(g.state.balls[0], { held: false, y: 1011, vy: 360 });
+  g.step();
+  assert.equal(g.phase, "finished");
+  assert.equal(g.state.balls.length, 0);
+  assert.equal(g.state.players[0].ammo, 0);
 });
 test("mixed seeded power/action replay is deterministic and bounded", () => {
   const a = game(123),

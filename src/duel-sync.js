@@ -95,8 +95,8 @@ export class DuelSync {
     const key = [
       snapshot.matchId,
       snapshot.phase,
-      snapshot.state.wave,
-      ...snapshot.state.goals,
+
+      // Individual goals no longer reset movement: the other ball stays live.
     ].join(":");
     const last = this.snapshots.at(-1);
     if (
@@ -214,7 +214,7 @@ export class DuelSync {
       this.local.offset *= Math.exp(-dt / this.correctionMs);
       const displayed = move(
         previousDisplay,
-        this.local.x + this.local.offset,
+        this.desired ?? this.local.x + this.local.offset,
         dt,
         this.local.width,
       );
@@ -228,25 +228,23 @@ export class DuelSync {
         R.width - this.local.width / 2,
       );
     }
-    // Do not combine an input-predicted paddle with an older interpolated ball
-    // at contact: that can display a save the authority never received in time.
+    // Keep balls current near contact, but never snap the local paddle away
+    // from a held finger target. Only the server decides collisions.
     if (this.authoritativeContact && snapshot.phase === "playing") {
       for (const slot of [0, 1]) {
         const nearby = latest.snapshot.state.balls.filter(
           (b) => !b.held && Math.abs(b.y - R.paddleTopY[slot]) < 110,
         );
         if (!nearby.length) continue;
-        snapshot.state.players[slot].x = latest.snapshot.state.players[slot].x;
+        if (slot !== this.slot)
+          snapshot.state.players[slot].x =
+            latest.snapshot.state.players[slot].x;
         for (const ball of nearby) {
           const rendered = snapshot.state.balls.find((b) => b.id === ball.id);
           if (rendered) {
             rendered.x = ball.x;
             rendered.y = ball.y;
           }
-        }
-        if (slot === this.slot && this.local) {
-          this.local.x = latest.snapshot.state.players[slot].x;
-          this.local.offset = 0;
         }
       }
     }

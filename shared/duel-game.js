@@ -207,32 +207,33 @@ export class DuelGame {
       (p.slowRemainingMs > 0 ? 0.65 : 1)
     );
   }
+  spawnBall(slot, held = false) {
+    const p = this.state.players[slot],
+      speed = this.ballSpeed(slot);
+    const direction = slot === 0 ? 1 : -1,
+      angle = (this.serveSign * Math.PI) / 12;
+    this.state.balls.push({
+      id: this.nextEntityId++,
+      x: p.x,
+      y:
+        slot === 0
+          ? R.paddleTopY[0] - R.ballRadius - 1
+          : R.paddleTopY[1] + R.paddleHeight + R.ballRadius + 1,
+      vx: held ? 0 : direction * Math.sin(angle) * speed,
+      vy: held ? 0 : -direction * Math.cos(angle) * speed,
+      r: R.ballRadius,
+      owner: slot,
+      held,
+      heldOffsetX: 0,
+      autoReleaseRemainingMs: held ? 1000 : 0,
+    });
+    this.emit("serve", { servingSlot: slot });
+  }
   serve() {
-    const first = this.state.servingSlot;
-    for (const slot of [first, 1 - first]) {
-      const p = this.state.players[slot],
-        speed = this.ballSpeed(slot);
-      const direction = slot === 0 ? 1 : -1,
-        angle = (this.serveSign * Math.PI) / 12;
-      this.state.balls.push({
-        id: this.nextEntityId++,
-        x: p.x,
-        y:
-          slot === 0
-            ? R.paddleTopY[0] - R.ballRadius - 1
-            : R.paddleTopY[1] + R.paddleHeight + R.ballRadius + 1,
-        vx: direction * Math.sin(angle) * speed,
-        vy: -direction * Math.cos(angle) * speed,
-        r: R.ballRadius,
-        owner: slot,
-        held: false,
-        heldOffsetX: 0,
-        autoReleaseRemainingMs: 0,
-      });
-    }
+    for (const slot of [this.state.servingSlot, 1 - this.state.servingSlot])
+      this.spawnBall(slot);
     this.serveSign *= -1;
     this.phase = "playing";
-    this.emit("serve", { servingSlot: first });
   }
   resetRally() {
     this.comboUntil = [0, 0];
@@ -269,15 +270,13 @@ export class DuelGame {
       this.updatePaddleWidth(p);
       this.emit("goal", { scorer, goals: [...this.state.goals] });
     }
-    // A round always finishes both balls before deciding first-to-five.
-    if (this.state.balls.length) return;
+
     const [a, b] = this.state.goals;
     if (Math.max(a, b) >= R.winningGoals && a !== b) {
       this.finish(a > b ? 0 : 1, "five_goals");
       return;
     }
-    this.resetRally();
-    this.beginCountdown("goal_countdown", R.serveCountdownMs);
+    for (const scorer of scorers) this.spawnBall(1 - scorer, true);
   }
   /** Trusted room-layer terminal hook; no client can choose the winner. */
   finish(winner, reason) {
@@ -921,7 +920,7 @@ export class DuelGame {
     }
     this.processActions();
     const exits = this.advanceBalls(starts);
-    this.advanceDrops(starts, exits.size > 0 && this.state.balls.length === 0);
+    this.advanceDrops(starts, false);
     this.resolveGoals(exits);
     if (!exits.size) this.updateWave();
     this.followHeldBalls();

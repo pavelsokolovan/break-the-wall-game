@@ -111,10 +111,11 @@ after three seconds of active play. Tap the paddle, press Space, or use the acti
 button to release all held balls and fire once; F fires without releasing. Bazooka
 adds five shots up to fifteen, with a 250ms firing cooldown. Each shot damages one brick
 or intercepts either player's hazard for +100 points. Multiball drops are replaced by gems (+500 points).
-Each round starts with two balls, one at each paddle. Returns capture a ball's ownership
+Play starts with two balls, one at each paddle. Returns capture a ball's ownership
 and colour for future brick points/drops. Each missed ball awards the opponent one goal
-and disappears; the other keeps playing. After both score, powers reset and a new pair
-serves. A completed round with at least five goals and a lead wins; tied goals continue.
+and immediately respawns at the conceding paddle. It launches after one second or
+on manual release; the other ball and powers keep running. First to five with a lead
+wins; simultaneous tied goals continue.
 The action button shows current server-confirmed ammo and held-ball state.
 
 Run two terminals after `npm ci`:
@@ -193,6 +194,6 @@ imperfect aiming, can miss balls, and uses normal paddle/action limits. You can 
 resume and rematch (swapping sides); practice does not add competitive Duel history.
 
 Front-edge overlap contacts are resolved while approaching a paddle. Near paddle
-contact, balls and paddles use the same authoritative snapshot so prediction cannot
-show a false save. Internet delay can still make last-moment moves arrive too late.
+contact, balls use the latest authoritative snapshot while the local paddle retains
+stable finger prediction instead of snapping back to old server positions. Internet delay can still make last-moment moves arrive too late.
 See [contact investigation and bot details](docs/DUEL_CONTACT_AND_PRACTICE.md).
