@@ -46,7 +46,8 @@ export function mountMultiplayer({
     panelFocus = null,
     resolveLeave = null,
     leaving = false,
-    lastRequest = null;
+    lastRequest = null,
+    waitingControl = null;
   const keys = new Set();
   let localStorage;
   try {
@@ -71,14 +72,44 @@ export function mountMultiplayer({
   function status(text) {
     $("duel-status").textContent = text;
   }
+  function clearControlWait() {
+    if (waitingControl) win.clearTimeout(waitingControl.timer);
+    waitingControl = null;
+  }
+  function sendControl(message, label) {
+    if (waitingControl || client.recovering || client.socket?.readyState !== 1)
+      return;
+    waitingControl = {
+      type: message.type,
+      label,
+      timer: win.setTimeout(() => {
+        waitingControl = null;
+        status("Server response timed out. Try again.");
+        controls();
+      }, 8000),
+    };
+    if (!client.send(message)) clearControlWait();
+    controls();
+  }
   function controls() {
+    const busy = pending || leaving || client.recovering || !!waitingControl;
+    $("duel-loading").hidden = !busy;
+    $("duel-panel").setAttribute("aria-busy", String(busy));
+    $("duel-loading-text").textContent =
+      waitingControl?.label ||
+      (leaving
+        ? "Leaving match…"
+        : client.recovering
+          ? "Reconnecting…"
+          : $("duel-status").textContent || "Waiting for server…");
     $("duel-practice").disabled =
       pending || !!room || client.recovering || !url;
     $("duel-create").disabled = pending || !!room || client.recovering || !url;
     $("duel-join").disabled = pending || !!room || client.recovering || !url;
     $("duel-code").disabled = pending || !!room || client.recovering;
     $("duel-ready").hidden = !room || !!snapshot;
-    $("duel-ready").disabled = !room?.players.every((p) => p.connected);
+    $("duel-ready").disabled =
+      !!waitingControl || !room?.players.every((p) => p.connected);
     $("duel-leave").hidden = !room;
     $("duel-connect").hidden = !!room;
     $("duel-cancel").hidden = !pending || !!room;
@@ -93,6 +124,7 @@ export function mountMultiplayer({
         : "PAUSE";
     $("duel-pause").disabled =
       !connected ||
+      !!waitingControl ||
       !!leaving ||
       !!panel ||
       !["playing", "countdown", "goal_countdown", "paused"].includes(
@@ -103,7 +135,10 @@ export function mountMultiplayer({
         ["reconnect", "server_busy"].includes(snapshot.state.pause.reason));
     $("duel-rematch").hidden = !result;
     $("duel-rematch").disabled =
-      !connected || leaving || !room?.players.every((p) => p.connected);
+      !connected ||
+      !!waitingControl ||
+      leaving ||
+      !room?.players.every((p) => p.connected);
     $("duel-rematch").textContent = room?.players[client.slot]?.rematchReady
       ? "CANCEL REMATCH"
       : "REMATCH";
@@ -123,6 +158,7 @@ export function mountMultiplayer({
     },
     onStatus(text) {
       if (!result) status(text);
+      if (!client.socket) clearControlWait();
       if (client.recovering || !client.socket) {
         inactive();
         sync.pending = [];
@@ -135,6 +171,21 @@ export function mountMultiplayer({
       }
     },
     onMessage(message) {
+      if (
+        waitingControl &&
+        (message.type === "error" ||
+          message.type === "result" ||
+          (waitingControl.type === "ready" && message.type === "room") ||
+          (waitingControl.type === "rematch" &&
+            ["room", "welcome"].includes(message.type)) ||
+          (["pause", "resume_play"].includes(waitingControl.type) &&
+            message.type === "snapshot" &&
+            (waitingControl.type === "pause"
+              ? message.phase === "paused"
+              : message.phase !== "paused" ||
+                message.state.pause?.consents?.[client.slot])))
+      )
+        clearControlWait();
       if (message.type === "welcome") {
         if (message.rematch) {
           snapshot = null;
@@ -255,18 +306,25 @@ export function mountMultiplayer({
         controls();
         resolveLeave?.();
       }
-      if (message.type === "error" && !result) status(message.message);
+      if (message.type === "error") {
+        if (!result) status(message.message);
+        controls();
+      }
     },
   });
   const wake = wakeFactory({
     fetcher: (...args) => win.fetch(...args),
     now,
     onStatus: (text) => {
-      if (active && pending) status(text);
+      if (active && pending) {
+        status(text);
+        controls();
+      }
     },
   });
   function cancelRequest() {
     if (!pending || room) return;
+    clearControlWait();
     generation++;
     wake.cancel();
     client.disconnect("Connection cancelled. Retry or play Solo.");
@@ -274,6 +332,7 @@ export function mountMultiplayer({
     controls();
   }
   function reset() {
+    clearControlWait();
     lastRequest = null;
     sync.reset();
     closePanel(false);
@@ -382,6 +441,7 @@ export function mountMultiplayer({
     const current = ++generation;
     lastRequest = type;
     pending = true;
+    status("Waking server…");
     controls();
     onUserGesture();
     try {
@@ -389,6 +449,14 @@ export function mountMultiplayer({
       if (current !== generation || !active) return;
       await client.connect(url);
       if (current !== generation) return;
+      status(
+        type === "join"
+          ? "Joining room…"
+          : type === "practice"
+            ? "Preparing bot…"
+            : "Creating room…",
+      );
+      controls();
       await client.request(type, code ? { code } : {});
     } catch (e) {
       if (current === generation) status(e.message);
@@ -413,7 +481,10 @@ export function mountMultiplayer({
   };
   $("duel-ready").onclick = () => {
     onUserGesture();
-    client.send({ type: "ready", ready: !room?.players[client.slot]?.ready });
+    sendControl(
+      { type: "ready", ready: !room?.players[client.slot]?.ready },
+      "Confirming readiness…",
+    );
   };
   $("duel-leave").onclick = async () => {
     if (
@@ -586,7 +657,7 @@ export function mountMultiplayer({
     inactive();
     if (doc.hidden) requestPause("background");
     else if (!panel && snapshot?.state.pause)
-      client.send({ type: "resume_play" });
+      sendControl({ type: "resume_play" }, "Resuming match…");
   });
   function showSnapshotStatus(s) {
     const pause = s.state.pause;
@@ -723,14 +794,14 @@ export function mountMultiplayer({
       !client.recovering &&
       client.socket?.readyState === 1
     )
-      client.send({ type: "pause", requested: true, reason });
+      sendControl({ type: "pause", requested: true, reason }, "Pausing match…");
   }
   function closePanel(consent = true) {
     if (!panel) return;
     panel = null;
     $("duel-info").hidden = true;
     if (consent && !doc.hidden && snapshot && !result)
-      client.send({ type: "resume_play" });
+      sendControl({ type: "resume_play" }, "Resuming match…");
     panelFocus?.focus();
     panelFocus = null;
     inactive();
@@ -779,15 +850,18 @@ export function mountMultiplayer({
       snapshot?.phase === "paused" &&
       ["manual", "panel", "background"].includes(snapshot.state.pause?.reason)
     )
-      client.send({ type: "resume_play" });
+      sendControl({ type: "resume_play" }, "Resuming match…");
     else requestPause();
   };
   $("duel-rematch").onclick = () => {
     inactive();
-    client.send({
-      type: "rematch",
-      ready: !room?.players[client.slot]?.rematchReady,
-    });
+    sendControl(
+      {
+        type: "rematch",
+        ready: !room?.players[client.slot]?.rematchReady,
+      },
+      "Confirming rematch…",
+    );
   };
   $("duel-share").onclick = async () => {
     if (!room) return;

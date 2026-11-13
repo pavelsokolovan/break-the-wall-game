@@ -1066,3 +1066,35 @@ test("practice is explicit, uses a real server request, labels bot and excludes 
   });
   assert.equal(f.ui.history.read().length, 0);
 });
+
+test("loading indicator covers room requests and clears after server response or cancellation", async (t) => {
+  const f = fixture(t);
+  f.ui.switchMode(true);
+  assert(f.$("duel-loading").hidden);
+  f.$("duel-create").click();
+  assert(!f.$("duel-loading").hidden);
+  assert.equal(f.$("duel-panel").getAttribute("aria-busy"), "true");
+  await turn();
+  const socket = f.sockets[0];
+  socket.open();
+  await turn();
+  assert.match(f.$("duel-loading-text").textContent, /Creating room/);
+  socket.receive(welcome(0));
+  socket.receive(room());
+  await turn();
+  assert(f.$("duel-loading").hidden);
+  f.$("duel-ready").click();
+  assert(!f.$("duel-loading").hidden);
+  assert(f.$("duel-ready").disabled);
+  socket.receive(room(true));
+  assert(f.$("duel-loading").hidden);
+  socket.receive(snapshot());
+  f.$("duel-pause").click();
+  assert(!f.$("duel-loading").hidden);
+  socket.receive({
+    type: "error",
+    code: "INVALID_PHASE",
+    message: "Pause unavailable.",
+  });
+  assert(f.$("duel-loading").hidden);
+});

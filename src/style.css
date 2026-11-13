@@ -1340,3 +1340,37 @@ body:has(#duel-panel:not([hidden])) #duel-ready {
 #duel-panel:not(:has(#duel-game:not([hidden]))) #duel-slots {
   font-size: 22px;
 }
+
+.duel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  color: var(--lime);
+  font:
+    22px "VT323",
+    monospace;
+}
+.duel-loading[hidden] {
+  display: none;
+}
+.duel-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #555565;
+  border-top-color: var(--lime);
+  border-radius: 50%;
+  animation: duel-spin 0.8s linear infinite;
+}
+@keyframes duel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .duel-spinner {
+    animation: none;
+    border-style: dotted;
+  }
+}
