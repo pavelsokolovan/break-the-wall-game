@@ -118,8 +118,8 @@ test(
     await turn();
     await f.advance(1);
     const game = f.app.manager.rooms.get(code).game;
-    assert.equal(game.state.players[0].x, 420);
-    assert.equal(game.state.players[1].x, 380);
+    assert.equal(game.state.players[0].x, 430);
+    assert.equal(game.state.players[1].x, 370);
     assert.equal(game.state.players[0].points, 0);
     a.send({ type: "input", seq: 1, x: 0, action: "none" });
     await turn();
@@ -349,7 +349,7 @@ test(
       }),
     );
     assert.equal(status, 503);
-    for (let i = 0; i < 61; i++) c.send({ type: "ping", id: i, clientTime: 0 });
+    for (let i = 0; i < 91; i++) c.send({ type: "ping", id: i, clientTime: 0 });
     assert.equal((await c.next("error")).code, "RATE_LIMITED");
     await c.closed;
   },
@@ -1342,5 +1342,39 @@ test(
     const contact = await a.next("snapshot", (s) => s.tick === 181);
     assert(contact.state.balls[0].vy < 0);
     assert.equal(contact.state.players[0].x, 400);
+  },
+);
+
+test(
+  "30Hz snapshots and negotiated 60Hz input stay within the transport rate limit",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code, welcome } = await f.room();
+    assert.equal(welcome.maximumInputHz, 60);
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const game = f.app.manager.rooms.get(code).game;
+    for (const ball of game.state.balls)
+      Object.assign(ball, { x: 100, y: 200, vx: 0, vy: 0 });
+    a.messages = [];
+    await f.advance(6);
+    const frames = a.messages.filter(
+      (m) => m.type === "snapshot" && m.tick > 180,
+    );
+    assert.deepEqual(
+      frames.map((s) => s.tick),
+      [182, 184, 186],
+    );
+    for (let seq = 1; seq <= 120; seq++) {
+      a.send({ type: "input", seq, x: 0.5, action: "none" });
+      await f.advance(1);
+    }
+    assert.equal(a.socket.readyState, 1);
+    assert(
+      !a.messages.some((m) => m.type === "error" && m.code === "RATE_LIMITED"),
+    );
   },
 );

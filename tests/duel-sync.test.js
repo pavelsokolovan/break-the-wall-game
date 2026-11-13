@@ -214,7 +214,7 @@ test("local paddle predicts before send, prunes acks, replays pending movement a
   sync.push(a, 0, 0);
   sync.setTarget(0.9, 0);
   const immediate = sync.frame(10).snapshot.state.players[0].x;
-  near(immediate, 412);
+  near(immediate, 418);
   assert.equal(sync.pending.length, 0);
   sync.recordInput({ seq: 1, x: 0.9, at: 10 });
   sync.frame(20);
@@ -226,10 +226,10 @@ test("local paddle predicts before send, prunes acks, replays pending movement a
   });
   sync.push(b, 20, 0);
   const corrected = sync.frame(20).snapshot.state.players[0].x;
-  near(corrected, 424);
+  near(corrected, 436);
   assert.equal(sync.pending.length, 1);
   const later = sync.frame(60).snapshot.state.players[0].x;
-  assert(later > corrected && later - corrected <= 48);
+  assert(later > corrected && later - corrected <= 72);
   const c = snapshot(1050);
   Object.assign(c.state.players[0], {
     x: 460,
@@ -239,7 +239,7 @@ test("local paddle predicts before send, prunes acks, replays pending movement a
   sync.push(c, 70, 0);
   assert.equal(sync.pending.length, 0);
   const next = sync.frame(70).snapshot.state.players[0].x;
-  assert(Math.abs(next - later) <= 12 + 1e-6);
+  assert(Math.abs(next - later) <= 18 + 1e-6);
 });
 test("prediction clamps field, held visuals follow only authoritative catches, and loss freezes display", () => {
   const sync = new DuelSync(),
@@ -248,7 +248,7 @@ test("prediction clamps field, held visuals follow only authoritative catches, a
   sync.push(a, 0, 1);
   sync.setTarget(1, 0);
   const frame = sync.frame(50).snapshot;
-  near(frame.state.players[1].x, 340);
+  near(frame.state.players[1].x, 310);
   assert.equal(frame.state.balls[0].owner, 0);
   for (let i = 0; i < 200; i++) sync.recordInput({ seq: i + 1, x: 1, at: 50 });
   assert.equal(sync.pending.length, 128);
@@ -559,4 +559,20 @@ test("continuous authoritative motion interpolates both paddles and balls at ide
   near(out.state.balls[0].x, 310);
   const frozen = sync.frame(1300, false).snapshot;
   assert.deepEqual(frozen, out);
+});
+
+test("client negotiates 60Hz inputs and falls back safely for older servers", async (t) => {
+  const f = fixture(t);
+  await joined(f);
+  f.sockets[0].receive({ ...welcome(), maximumInputHz: 60 });
+  assert(f.client.input(0.5));
+  await f.timers.advance(16);
+  assert(!f.client.input(0.6));
+  await f.timers.advance(1);
+  assert(f.client.input(0.6));
+  f.sockets[0].receive(welcome());
+  assert.equal(f.client.maximumInputHz, 30);
+  assert(f.client.input(0.5));
+  await f.timers.advance(17);
+  assert(!f.client.input(0.6));
 });

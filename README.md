@@ -200,3 +200,7 @@ See [contact investigation and bot details](docs/DUEL_CONTACT_AND_PRACTICE.md).
 
 See [shared-timeline investigation](docs/DUEL_SHARED_TIMELINE.md) for the correction to
 local paddle prediction and immediate server contact snapshots.
+
+Duel response now uses negotiated inputs up to 60Hz, authoritative snapshots at 30Hz,
+a one-frame render buffer and a 50% faster paddle travel cap. Balls retain their speeds
+and collision authority. See [response settings](docs/DUEL_RESPONSE_SPEED.md).

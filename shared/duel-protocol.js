@@ -287,6 +287,7 @@ const serverSchemas = {
     token,
     matchId: nullable(matchId),
     nextInputSeq: positive,
+    maximumInputHz: optional(enumeration(30, 60)),
     resumed: optional(bool),
     rematch: optional(bool),
   },

@@ -70,6 +70,7 @@ export class OnlineClient {
     this.slot = null;
     this.nextSeq = 1;
     this.lastInputAt = -Infinity;
+    this.maximumInputHz = 30;
     this.state = "idle";
     this.recovering = false;
     this.session = this.readSession();
@@ -188,6 +189,7 @@ export class OnlineClient {
           this.clock.observe(message.serverTime, this.now());
         if (message.type === "snapshot") this.matchId = message.matchId;
         if (message.type === "welcome") {
+          this.maximumInputHz = message.maximumInputHz ?? 30;
           this.matchId = message.matchId;
           const same =
             !message.rematch && this.session?.playerId === message.playerId;
@@ -290,7 +292,8 @@ export class OnlineClient {
       !["none", "release_fire", "fire"].includes(action)
     )
       return false;
-    if (this.now() - this.lastInputAt < 1000 / 30) return false;
+    if (this.now() - this.lastInputAt < 1000 / this.maximumInputHz - 1e-6)
+      return false;
     const seq = this.nextSeq;
     if (
       !this.send({

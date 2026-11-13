@@ -412,7 +412,7 @@ test("opponent overlaps never catch or damage; swept moving-paddle catches work 
     assert(g.state.players.every((p) => p.points === 0));
     g.state.drops = [
       drop(g, "rocket", owner, {
-        x: owner === 0 ? 322 : 478,
+        x: owner === 0 ? 332 : 468,
         y: owner === 0 ? 898 : 102,
       }),
     ];

@@ -64,7 +64,7 @@ export function mountMultiplayer({
   const clock = new ServerClock(),
     sync = new DuelSync({
       clock,
-      interpolationMs: 50,
+      interpolationMs: 1000 / 60,
       correctionMs: 40,
       predictLocal: false,
     });

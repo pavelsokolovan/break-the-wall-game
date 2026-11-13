@@ -106,11 +106,11 @@ test("view inputs are sequenced, latest-target-only, clamped and speed-limited",
   assert(!g.applyInput(2, { seq: 4, x: 1, action: "none" }));
   assert(!g.applyInput(0, { seq: 4, x: 1, action: "launch" }));
   g.step();
-  assert.equal(g.state.players[0].x, 420);
-  assert.equal(g.state.players[1].x, 380);
-  assert.equal(g.state.players[0].vx, 1200);
-  assert.equal(g.state.players[1].vx, -1200);
-  ticks(g, 15);
+  assert.equal(g.state.players[0].x, 430);
+  assert.equal(g.state.players[1].x, 370);
+  assert.equal(g.state.players[0].vx, R.maximumPaddleSpeed);
+  assert.equal(g.state.players[1].vx, -R.maximumPaddleSpeed);
+  ticks(g, 10);
   assert.equal(g.state.players[0].x, 720);
   assert.equal(g.state.players[0].vx, 1200);
   assert(g.applyInput(0, { seq: 4, x: 0.89375, action: "none" })); // 715, actual final motion -5
@@ -166,14 +166,14 @@ test("stationary, slow, and fast returns use owner-view contact position and str
         g.drainEvents().filter((e) => e.type === "paddle_hit").length,
         0,
       );
-      assert(Math.abs(p.vx) <= 1200);
+      assert(Math.abs(p.vx) <= R.maximumPaddleSpeed);
     }
 });
 test("moving paddle collisions use contact-time coverage, not final tick position", () => {
   const g = playing();
-  // Right edge travels 480->500, but the ball passes behind the face before
+  // Right edge travels 480->510, but the ball passes behind the face before
   // the moving corner gets within its radius. Final-position collision would catch it.
-  g.state.balls = [ball(g, { x: 495, y: 917, vx: 0, vy: 360 })];
+  g.state.balls = [ball(g, { x: 505, y: 917, vx: 0, vy: 360 })];
   g.applyInput(0, { seq: 1, x: 1, action: "none" });
   g.step();
   assert(g.state.balls[0].vy > 0);

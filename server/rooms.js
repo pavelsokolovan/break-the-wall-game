@@ -50,6 +50,7 @@ export class RoomManager {
       matchId: room.game?.matchId || null,
       nextInputSeq:
         (room.game?.state.players[connection.slot].lastAckInputSeq || 0) + 1,
+      maximumInputHz: R.maximumInputHz,
       resumed,
     };
   }
@@ -141,7 +142,7 @@ export class RoomManager {
       room: null,
       slot: null,
       cache: new Map(),
-      bucket: new Bucket(60, 50, this.now()),
+      bucket: new Bucket(90, 80, this.now()),
       lastPong: this.now(),
     });
   }
@@ -224,7 +225,7 @@ export class RoomManager {
     if (
       immediate ||
       items.some((e) => e.type === "paddle_hit") ||
-      game.tick % 3 === 0 ||
+      game.tick % (R.simulationHz / R.snapshotHz) === 0 ||
       game.phase === "finished"
     )
       this.snapshot(room);

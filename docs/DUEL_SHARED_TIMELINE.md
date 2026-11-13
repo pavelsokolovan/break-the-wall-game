@@ -44,3 +44,7 @@ Run the full regression suite, syntax/build and Chromium two-user/bot session sm
 Verified locally: 188 automated tests pass, including the new timing/contact regressions;
 syntax checks, Pages production build and Chromium two-player/bot session smoke pass.
 No push or deployment was performed for this change.
+
+Speed-profile update: the buffer is now 16.67ms and periodic snapshots 30Hz; see
+[DUEL_RESPONSE_SPEED.md](DUEL_RESPONSE_SPEED.md). Coherent authoritative presentation
+and immediate paddle-contact snapshots are retained.
