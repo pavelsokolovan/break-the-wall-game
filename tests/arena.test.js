@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import WebSocket from "ws";
 import { ArenaBot } from "../shared/arena-bot.js";
-import { ArenaGame, arenaPaddle } from "../shared/arena-game.js";
+import {
+  ARENA_FORMATIONS,
+  ArenaGame,
+  arenaPaddle,
+} from "../shared/arena-game.js";
 import { ArenaRooms, parseArenaMessage } from "../server/arena-rooms.js";
 import { createDuelServer } from "../server/index.js";
 const ticks = (g, n) => {
@@ -441,3 +445,33 @@ test(
     }
   },
 );
+
+test("arena seeds generate varied safe square formations with equal access from every side", () => {
+  const seen = new Map();
+  for (let seed = 1; seed <= 100; seed++) {
+    const a = new ArenaGame(4, seed),
+      b = new ArenaGame(3, seed);
+    assert.deepEqual(a.bricks, b.bricks, "room size does not skew formation");
+    assert.deepEqual(
+      a.bricks,
+      new ArenaGame(4, seed).bricks,
+      "seed is reproducible",
+    );
+    const positions = new Set(a.bricks.map((brick) => `${brick.x},${brick.y}`));
+    assert.equal(positions.size, a.bricks.length);
+    assert(a.bricks.length >= 16 && a.bricks.length <= 33);
+    for (const brick of a.bricks) {
+      assert.equal(brick.w, 32);
+      assert.equal(brick.h, 32);
+      assert(brick.x >= 264 && brick.x + brick.w <= 536);
+      assert(brick.y >= 264 && brick.y + brick.h <= 536);
+      assert(
+        positions.has(`${800 - brick.y - brick.h},${brick.x}`),
+        "quarter-turn symmetry",
+      );
+    }
+    seen.set(a.formation, JSON.stringify([...positions].sort()));
+  }
+  assert.deepEqual(new Set(seen.keys()), new Set(ARENA_FORMATIONS));
+  assert.equal(new Set(seen.values()).size, 5, "all five formations differ");
+});

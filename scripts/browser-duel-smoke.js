@@ -185,6 +185,13 @@ try {
   for (const p of [a, b])
     await evaluate(p, "document.getElementById('online-mode').click()");
   assert.equal(healthRequests, 0, "Selecting a mode must not wake the server");
+  assert(
+    await evaluate(
+      a,
+      "document.querySelectorAll('.mode-selector > button').length===2 && !document.getElementById('online-options').hidden && document.getElementById('arena-mode').parentElement.id==='online-options'",
+    ),
+    "Arena is nested under Online Duel",
+  );
   await evaluate(a, "document.getElementById('duel-create').click()");
   await until(
     a,
@@ -706,7 +713,29 @@ try {
   for (const count of [3, 4]) {
     app.manager.ipAttempts.clear(); // Separate test scenarios share one loopback IP.
     for (const p of arenaPages.slice(0, count))
-      await evaluate(p, "document.getElementById('arena-mode').click()");
+      await evaluate(
+        p,
+        "document.getElementById('online-mode').click();document.getElementById('arena-mode').click()",
+      );
+    assert(
+      await evaluate(
+        a,
+        "document.getElementById('online-mode').getAttribute('aria-pressed')==='true' && !document.getElementById('online-options').hidden && document.getElementById('duel-panel').hidden",
+      ),
+      "Arena keeps Online Duel selected",
+    );
+    if (count === 3) {
+      await command("Page.bringToFront", {}, a);
+      const shot = await command(
+        "Page.captureScreenshot",
+        { format: "png" },
+        a,
+      );
+      await writeFile(
+        "/tmp/brickfall-online-menu.png",
+        Buffer.from(shot.data, "base64"),
+      );
+    }
     await evaluate(
       a,
       `document.getElementById('arena-create${count}').click()`,
@@ -777,6 +806,14 @@ try {
       "document.getElementById('arena-leave').click()",
     );
     assert(!app.arenaManager.rooms.has(arenaRoom.code));
+    await evaluate(a, "document.getElementById('duel-mode').click()");
+    assert(
+      await evaluate(
+        a,
+        "!document.getElementById('duel-panel').hidden && document.getElementById('arena-panel').hidden && !document.getElementById('online-options').hidden",
+      ),
+      "Nested 2 Players returns to Duel setup",
+    );
     for (const p of arenaPages.slice(0, count))
       await evaluate(p, "document.getElementById('solo-mode').click()");
   }
@@ -785,7 +822,7 @@ try {
     app.manager.ipAttempts.clear();
     await evaluate(
       a,
-      `document.getElementById('arena-mode').click();document.getElementById('arena-bots').value='${bots}';document.getElementById('arena-practice').click()`,
+      `document.getElementById('online-mode').click();document.getElementById('arena-mode').click();document.getElementById('arena-bots').value='${bots}';document.getElementById('arena-practice').click()`,
     );
     if (bots === 1) {
       await until(a, "!document.getElementById('duel-ready').disabled");
@@ -827,7 +864,7 @@ try {
   }
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; real 3/4-page square arenas; selectable 1/2/3-bot practice; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; nested online menu; real 3/4-page square arenas; selectable 1/2/3-bot practice; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",

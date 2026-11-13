@@ -5,13 +5,13 @@
 A browser arcade game with original pixel graphics, synthesized chiptune sounds, ten levels with randomly generated diamond, invader, chevron, twin-tower, wave, and portal walls, explosive bricks, power-ups, and local high scores. Built with JavaScript, Canvas 2D, and Vite; no game engine or server required.
 
 The game has three separate modes: **Solo**, the single-player campaign;
-**Online Duel**, the existing two-player game; and **3–4 Players**, a new square
+**Online Duel**, the existing two-player game; and **Online Duel → 3–4 Players**, a new square
 arena. Solo works without a backend and keeps its existing saves. The online modes
 use the same Node backend with separate rooms and rules.
 
-In **3–4 Players**, create a room for three or four people, share its code, and have
+In **Online Duel → 3–4 Players**, create a room for three or four people, share its code, and have
 everyone press **Ready**. Each player defends a coloured side of the square and starts
-with five lives and one ball. Central bricks are square. Misses cost a life and respawn
+with five lives and one ball. Square bricks form a random diamond, ring, cross, star or four islands. Misses cost a life and respawn
 the ball; eliminated sides become walls. The last player standing wins. Three-player
 rooms have a solid unused left wall. Drag along your side, or use the strip below the
 field. Leaving or disconnecting forfeits; this initial arena release has no reconnect,

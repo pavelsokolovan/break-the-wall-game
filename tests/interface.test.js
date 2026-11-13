@@ -152,6 +152,25 @@ test("interface starts, moves, launches, pauses, ends, saves and reloads results
   assert.equal(get("motion"), null);
   assert.equal(doc.querySelector(".intro"), null);
   assert.equal(doc.querySelector(".game-name").textContent, "Brickfall Blitz");
+  // Online sizes are nested; returning to Solo clears every online selection.
+  assert.equal(doc.querySelectorAll(".mode-selector > button").length, 2);
+  get("online-mode").click();
+  assert.equal(get("online-options").hidden, false);
+  get("arena-mode").click();
+  assert.equal(get("arena-panel").hidden, false);
+  assert.equal(get("online-mode").getAttribute("aria-pressed"), "true");
+  assert.equal(get("duel-mode").getAttribute("aria-pressed"), "false");
+  get("solo-mode").click();
+  assert.equal(get("online-options").hidden, true);
+  assert.equal(get("online-mode").getAttribute("aria-pressed"), "false");
+  assert.equal(get("solo-mode").getAttribute("aria-pressed"), "true");
+  get("online-mode").click();
+  get("arena-mode").click();
+  get("duel-mode").click();
+  assert.equal(get("arena-panel").hidden, true);
+  assert.equal(get("duel-panel").hidden, false);
+  assert.equal(get("online-options").hidden, false);
+  get("solo-mode").click();
   // Reinitializing the real module represents a new page using the same storage.
   await import("../src/main.js?reload");
   assert(

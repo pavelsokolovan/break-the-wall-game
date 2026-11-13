@@ -720,6 +720,8 @@ const duelUI = mountMultiplayer({
   onModeChange(active) {
     if (active) backgroundPause();
     onlineActive = active;
+    $("online-options").hidden = !active;
+    $("duel-mode").setAttribute("aria-pressed", String(active));
   },
   onUserGesture: audio,
   onSound: sound,

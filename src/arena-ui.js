@@ -88,10 +88,16 @@ export function mountArena({
     $("arena-panel").hidden = true;
     $("arena-mode").setAttribute("aria-pressed", "false");
     if (showSolo) {
+      $("online-mode").setAttribute("aria-pressed", "false");
       $("solo-panel").hidden = false;
       $("solo-tools").hidden = false;
       $("solo-mode").setAttribute("aria-pressed", "true");
     }
+    $("online-options").hidden = showSolo || $("duel-panel").hidden;
+    $("duel-mode").setAttribute(
+      "aria-pressed",
+      String(!$("duel-panel").hidden),
+    );
     onExit();
   }
   function enter() {
@@ -102,8 +108,10 @@ export function mountArena({
     $("solo-tools").hidden = true;
     $("duel-panel").hidden = true;
     $("arena-panel").hidden = false;
-    for (const id of ["solo-mode", "online-mode"])
-      $(id).setAttribute("aria-pressed", "false");
+    $("solo-mode").setAttribute("aria-pressed", "false");
+    $("online-mode").setAttribute("aria-pressed", "true");
+    $("duel-mode").setAttribute("aria-pressed", "false");
+    $("online-options").hidden = false;
     $("arena-mode").setAttribute("aria-pressed", "true");
     status(
       url
@@ -111,6 +119,7 @@ export function mountArena({
         : "Online server unavailable. Solo remains available.",
     );
     controls();
+    $("arena-mode").focus({ preventScroll: true });
   }
   function send(message) {
     if (socket?.readyState !== 1) return false;
@@ -392,6 +401,7 @@ export function mountArena({
     }
     win.requestAnimationFrame(frame);
   }
+  $("duel-mode").onclick = () => $("online-mode").click();
   $("arena-mode").onclick = enter;
   $("solo-mode").addEventListener("click", () => exit(true));
   $("online-mode").addEventListener("click", () => exit(false));

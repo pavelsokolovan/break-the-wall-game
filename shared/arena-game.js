@@ -1,5 +1,14 @@
 import { seeded } from "./game-helpers.js";
 export const ARENA_SIZE = 800;
+export const ARENA_FORMATIONS = ["diamond", "ring", "cross", "star", "islands"];
+const formations = [
+  (x, y) => Math.abs(x) + Math.abs(y) <= 3,
+  (x, y) => x * x + y * y >= 5 && x * x + y * y <= 10,
+  (x, y) => Math.abs(x) <= 1 || Math.abs(y) <= 1,
+  (x, y) =>
+    Math.abs(x) === Math.abs(y) || (Math.abs(x) <= 1 && Math.abs(y) <= 1),
+  (x, y) => Math.abs(x) >= 2 && Math.abs(y) >= 2,
+];
 export const ARENA_COLORS = ["#d3fa65", "#66dfd1", "#ff6090", "#b895ff"];
 export const ARENA_SIDES = ["BOTTOM", "RIGHT", "TOP", "LEFT"];
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -35,15 +44,19 @@ export class ArenaGame {
     this.wall();
   }
   wall() {
-    for (let row = 0; row < 5; row++)
-      for (let col = 0; col < 5; col++)
+    const choice = Math.floor(this.random() * formations.length);
+    this.formation = ARENA_FORMATIONS[choice];
+    for (let row = -3; row <= 3; row++)
+      for (let col = -3; col <= 3; col++) {
+        if (!formations[choice](col, row)) continue;
         this.bricks.push({
           id: this.nextId++,
-          x: 304 + col * 40,
-          y: 304 + row * 40,
+          x: 384 + col * 40,
+          y: 384 + row * 40,
           w: 32,
           h: 32,
         });
+      }
   }
   spawn(slot) {
     if (!this.players[slot]?.lives) return;
@@ -238,6 +251,7 @@ export class ArenaGame {
       phase: this.phase,
       tick: this.tick,
       countdown: this.countdown,
+      formation: this.formation,
       winner: this.winner,
       players: this.players,
       balls: this.balls,

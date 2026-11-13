@@ -29,6 +29,14 @@
         <nav class="mode-selector" aria-label="Game mode">
           <button id="solo-mode" aria-pressed="true">SOLO</button>
           <button id="online-mode" aria-pressed="false">ONLINE DUEL</button>
+        </nav>
+        <nav
+          id="online-options"
+          class="online-options"
+          aria-label="Online game size"
+          hidden
+        >
+          <button id="duel-mode" aria-pressed="true">2 PLAYERS</button>
           <button id="arena-mode" aria-pressed="false">3–4 PLAYERS</button>
         </nav>
         <div id="solo-panel" class="arcade-layout">
@@ -87,31 +95,48 @@
           aria-label="Three or four player arena"
           hidden
         >
-          <h2>SQUARE ARENA</h2>
+          <h2>3–4 PLAYER ARENA</h2>
           <p id="arena-status" role="status">Create or join a room.</p>
           <p id="arena-loading" hidden>Connecting… please wait</p>
           <div id="arena-setup">
-            <button id="arena-create3">CREATE · 3 PLAYERS</button>
-            <button id="arena-create4">CREATE · 4 PLAYERS</button>
-            <label for="arena-bots">TEST ON YOUR OWN</label>
-            <select id="arena-bots" aria-label="Number of bots">
-              <option value="1">1 BOT · TWO-PLAYER DUEL</option>
-              <option value="2" selected>2 BOTS · THREE-PLAYER ARENA</option>
-              <option value="3">3 BOTS · FOUR-PLAYER ARENA</option>
-            </select>
-            <button id="arena-practice">TEST WITH BOTS</button>
-            <label for="arena-code">ARENA ROOM CODE</label>
-            <input
-              id="arena-code"
-              maxlength="6"
-              placeholder="ABC234"
-              autocomplete="off"
-            />
-            <button id="arena-join">JOIN ARENA</button>
-            <p>
-              Five lives each. Defend your coloured side. Last player standing
-              wins. The unused side is a wall in 3-player games.
-            </p>
+            <section class="arena-choice" aria-labelledby="arena-create-label">
+              <h3 id="arena-create-label">Create a room</h3>
+              <div class="arena-choice-row">
+                <button id="arena-create3">3 PLAYERS</button>
+                <button id="arena-create4">4 PLAYERS</button>
+              </div>
+            </section>
+            <section class="arena-choice" aria-labelledby="arena-join-label">
+              <label id="arena-join-label" for="arena-code">Join a room</label>
+              <div class="arena-choice-row">
+                <input
+                  id="arena-code"
+                  maxlength="6"
+                  placeholder="ROOM CODE"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                />
+                <button id="arena-join">JOIN</button>
+              </div>
+            </section>
+            <section
+              class="arena-choice"
+              aria-labelledby="arena-practice-label"
+            >
+              <label id="arena-practice-label" for="arena-bots"
+                >Practice on your own</label
+              >
+              <div class="arena-choice-row">
+                <select id="arena-bots" aria-label="Number of bots">
+                  <option value="1">1 bot · Duel</option>
+                  <option value="2" selected>2 bots · Arena</option>
+                  <option value="3">3 bots · Arena</option>
+                </select>
+                <button id="arena-practice">PLAY</button>
+              </div>
+            </section>
+            <p>Defend your side. Five lives. Last player standing wins.</p>
           </div>
           <div class="arena-actions">
             <button id="arena-ready" hidden>READY</button
@@ -160,12 +185,11 @@
           </div>
           <form id="duel-connect" class="duel-connect">
             <section class="duel-start-choice" aria-label="Host a game">
-              <h3>Play with a friend</h3>
-              <p>Create a room, then share its code.</p>
+              <h3>Create a room</h3>
               <button id="duel-create" type="button">CREATE ROOM</button>
             </section>
             <section class="duel-start-choice" aria-label="Join a game">
-              <label for="duel-code">Have a room code?</label>
+              <label for="duel-code">Join a room</label>
               <div class="duel-join-row">
                 <input
                   id="duel-code"
@@ -179,7 +203,7 @@
               </div>
             </section>
             <section class="duel-start-choice" aria-label="Practice">
-              <h3>Playing on your own?</h3>
+              <h3>Practice on your own</h3>
               <button id="duel-practice" type="button">TEST VS BOT</button>
             </section>
           </form>
