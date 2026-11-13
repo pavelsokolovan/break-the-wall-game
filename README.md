@@ -140,8 +140,8 @@ and shows an interruption.
 
 The private seat token is kept in this tab's session storage, separately from Solo
 saves. After a reload, select Online Duel to attempt recovery on the same backend.
-Selecting Solo or leaving clears that identity and cancels recovery. Paddle movement
-is predicted locally and remote motion is interpolated; collisions, actions and scores
+Selecting Solo or leaving clears that identity and cancels recovery. Paddles and balls
+are displayed on the same interpolated server timeline; collisions, actions and scores
 remain authoritative on the server. Stale state freezes movement and disables actions.
 
 For LAN development, copy `.env.example` to `.env` and add the frontend's actual LAN
@@ -193,7 +193,10 @@ actual multiplayer server and network connection. The bot reacts with delays and
 imperfect aiming, can miss balls, and uses normal paddle/action limits. You can pause,
 resume and rematch (swapping sides); practice does not add competitive Duel history.
 
-Front-edge overlap contacts are resolved while approaching a paddle. Near paddle
-contact, balls use the latest authoritative snapshot while the local paddle retains
-stable finger prediction instead of snapping back to old server positions. Internet delay can still make last-moment moves arrive too late.
+Front-edge overlap contacts are resolved while approaching a paddle. Both paddles and balls now use
+the same authoritative timeline, including at rebounds, so an unconfirmed finger target
+cannot show a false save. Internet delay can still make last-moment moves arrive too late.
 See [contact investigation and bot details](docs/DUEL_CONTACT_AND_PRACTICE.md).
+
+See [shared-timeline investigation](docs/DUEL_SHARED_TIMELINE.md) for the correction to
+local paddle prediction and immediate server contact snapshots.

@@ -488,3 +488,75 @@ test("stationary finger target never recoils on delayed snapshots, goals or near
   }
   near(previous, 640);
 });
+
+test("authoritative display cannot show a finger-predicted save before server movement", () => {
+  for (const slot of [0, 1]) {
+    const sync = new DuelSync({ predictLocal: false, interpolationMs: 50 });
+    const a = snapshot(1000),
+      b = snapshot(1050);
+    for (const s of [a, b]) {
+      s.state.players[slot].x = 200;
+      Object.assign(s.state.balls[0], {
+        x: 600,
+        y: slot === 0 ? 910 : 90,
+        vy: slot === 0 ? 360 : -360,
+      });
+    }
+    sync.push(a, 1000, slot);
+    sync.setTarget(slot === 0 ? 0.75 : 0.25, 1000);
+    sync.recordInput({ seq: 1, x: slot === 0 ? 0.75 : 0.25, at: 1000 });
+    sync.push(b, 1050, slot);
+    const out = sync.frame(1075).snapshot;
+    assert.equal(out.state.players[slot].x, 200);
+    assert.equal(out.state.balls[0].x, 600);
+  }
+});
+test("a rebound transitions the ball and moving paddle together on the same server timeline", () => {
+  for (const slot of [0, 1]) {
+    const sync = new DuelSync({ predictLocal: false, interpolationMs: 50 });
+    const a = snapshot(1000),
+      b = snapshot(1050),
+      sign = slot === 0 ? 1 : -1;
+    a.state.players[slot].x = 300;
+    b.state.players[slot].x = 360;
+    Object.assign(a.state.balls[0], {
+      x: 350,
+      y: slot === 0 ? 895 : 105,
+      vx: 40,
+      vy: sign * 360,
+      owner: 1 - slot,
+    });
+    Object.assign(b.state.balls[0], {
+      x: 352,
+      y: slot === 0 ? 900 : 100,
+      vx: -80,
+      vy: -sign * 360,
+      owner: slot,
+    });
+    sync.push(a, 1000, slot);
+    sync.push(b, 1050, slot);
+    const before = sync.frame(1075).snapshot;
+    assert.equal(before.state.players[slot].x, 300);
+    assert.equal(before.state.balls[0].vy, sign * 360);
+    const after = sync.frame(1100).snapshot;
+    assert.equal(after.state.players[slot].x, 360);
+    assert.equal(after.state.balls[0].vy, -sign * 360);
+  }
+});
+test("continuous authoritative motion interpolates both paddles and balls at identical fraction", () => {
+  const sync = new DuelSync({ predictLocal: false, interpolationMs: 50 });
+  const a = snapshot(1000),
+    b = snapshot(1050);
+  a.state.players[0].x = 200;
+  b.state.players[0].x = 260;
+  a.state.balls[0].x = 300;
+  b.state.balls[0].x = 320;
+  sync.push(a, 1000, 0);
+  sync.push(b, 1050, 0);
+  sync.setTarget(0.95, 1050);
+  const out = sync.frame(1075).snapshot;
+  near(out.state.players[0].x, 230);
+  near(out.state.balls[0].x, 310);
+  const frozen = sync.frame(1300, false).snapshot;
+  assert.deepEqual(frozen, out);
+});

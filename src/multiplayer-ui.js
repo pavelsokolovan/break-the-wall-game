@@ -66,7 +66,7 @@ export function mountMultiplayer({
       clock,
       interpolationMs: 50,
       correctionMs: 40,
-      authoritativeContact: true,
+      predictLocal: false,
     });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
   function status(text) {

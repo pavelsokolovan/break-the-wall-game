@@ -57,7 +57,9 @@ export class DuelSync {
     interpolationMs = 100,
     correctionMs = 80,
     authoritativeContact = false,
+    predictLocal = true,
   } = {}) {
+    this.predictLocal = predictLocal;
     this.authoritativeContact = authoritativeContact;
     this.interpolationMs = interpolationMs;
     this.correctionMs = correctionMs;
@@ -154,7 +156,7 @@ export class DuelSync {
     const stale = now - latest.receivedAt > 250;
     if (!connected && this.lastRendered)
       return { snapshot: structuredClone(this.lastRendered), stale: true };
-    const snapshot = structuredClone(latest.snapshot);
+    let snapshot = structuredClone(latest.snapshot);
     this.cursor = Math.max(
       this.cursor,
       this.clock.serverNow(now) - this.interpolationMs,
@@ -196,7 +198,32 @@ export class DuelSync {
           item.y = blend(start.y, end.y);
       }
     };
-    if (snapshot.phase === "playing") {
+    let interpolateFrame = true;
+    if (!this.predictLocal) {
+      const previousBalls = new Map(left.state.balls.map((b) => [b.id, b]));
+      const discontinuity =
+        left.state.balls.length !== right.state.balls.length ||
+        right.state.balls.some((b) => {
+          const old = previousBalls.get(b.id);
+          return (
+            !old ||
+            old.held !== b.held ||
+            old.owner !== b.owner ||
+            Math.sign(old.vx) !== Math.sign(b.vx) ||
+            Math.sign(old.vy) !== Math.sign(b.vy)
+          );
+        }) ||
+        left.state.players.some(
+          (p, i) => p.width !== right.state.players[i].width,
+        );
+      // At a bounce/respawn, hold the complete earlier frame until the later
+      // frame's time. Never mix a post-bounce ball with a pre-bounce paddle.
+      snapshot = structuredClone(
+        this.cursor >= right.serverTime ? right : left,
+      );
+      interpolateFrame = !discontinuity;
+    }
+    if (snapshot.phase === "playing" && interpolateFrame) {
       for (const key of ["players", "balls", "drops", "shots"])
         interpolate(snapshot.state[key], left.state[key], right.state[key]);
     }
@@ -219,8 +246,8 @@ export class DuelSync {
         this.local.width,
       );
       this.local.offset = displayed - this.local.x;
-      snapshot.state.players[this.slot].x = displayed;
-    } else if (this.local) {
+      if (this.predictLocal) snapshot.state.players[this.slot].x = displayed;
+    } else if (this.local && this.predictLocal) {
       // Stale/disconnected frames keep the last local display, never accumulate motion.
       snapshot.state.players[this.slot].x = clamp(
         this.local.x + this.local.offset,
@@ -230,7 +257,11 @@ export class DuelSync {
     }
     // Keep balls current near contact, but never snap the local paddle away
     // from a held finger target. Only the server decides collisions.
-    if (this.authoritativeContact && snapshot.phase === "playing") {
+    if (
+      this.predictLocal &&
+      this.authoritativeContact &&
+      snapshot.phase === "playing"
+    ) {
       for (const slot of [0, 1]) {
         const nearby = latest.snapshot.state.balls.filter(
           (b) => !b.held && Math.abs(b.y - R.paddleTopY[slot]) < 110,

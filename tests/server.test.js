@@ -1315,3 +1315,32 @@ test(
     assert.equal(game.state.balls.length, 2);
   },
 );
+
+test(
+  "paddle contact sends an immediate snapshot between periodic snapshot ticks",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const game = f.app.manager.rooms.get(code).game;
+    game.state.players[0].x = 400;
+    game.state.players[0].targetX = 400;
+    Object.assign(game.state.balls[0], {
+      x: 400,
+      y: 905,
+      vx: 0,
+      vy: 360,
+      owner: 1,
+    });
+    a.messages = [];
+    await f.advance(1);
+    assert.equal(game.tick % 3, 1);
+    const contact = await a.next("snapshot", (s) => s.tick === 181);
+    assert(contact.state.balls[0].vy < 0);
+    assert.equal(contact.state.players[0].x, 400);
+  },
+);

@@ -221,7 +221,12 @@ export class RoomManager {
         matchId: game.matchId,
         items,
       });
-    if (immediate || game.tick % 3 === 0 || game.phase === "finished")
+    if (
+      immediate ||
+      items.some((e) => e.type === "paddle_hit") ||
+      game.tick % 3 === 0 ||
+      game.phase === "finished"
+    )
       this.snapshot(room);
     if (game.phase === "finished" && !room.resultSent) {
       room.resultSent = true;

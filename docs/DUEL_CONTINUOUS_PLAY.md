@@ -32,3 +32,8 @@ with this change. Real-phone confirmation of the reported touch behavior remains
 Verified locally: all 182 automated tests pass, along with syntax checks, production
 base-path build and the two-page Chromium smoke (including server bot practice).
 No push or deployment was performed as part of this fix.
+
+Presentation update: [DUEL_SHARED_TIMELINE.md](DUEL_SHARED_TIMELINE.md) supersedes the
+local prediction described here. The Duel UI now renders the local paddle and balls
+from the same authoritative timeline to prevent false coverage and rebound angles.
+Continuous respawning and the underlying physics fix remain active.
