@@ -289,6 +289,7 @@ export class DuelSync {
       snapshot.phase === "playing"
     ) {
       const p = snapshot.state.players[this.slot];
+      p.width = latest.snapshot.state.players[this.slot].width;
       p.x = clamp(this.desired, p.width / 2, R.width - p.width / 2);
     }
     for (const b of snapshot.state.balls)

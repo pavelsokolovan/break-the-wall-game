@@ -36,3 +36,7 @@ action/status text, bonus visibility/content changes and loading visibility.
 Verified locally: 193 automated tests pass, plus syntax checks, production base-path
 build and Chromium two-player/bot smoke with the live field-geometry assertion.
 No push or deployment was performed for this change.
+
+Follow-up: DUEL_BODY_CONTACT_AND_OVERLAY.md adds solid-body overlap resolution for
+new direct placements and removes the external bonus row entirely in favour of an
+absolute translucent field overlay. Other direct-control and fixed toolbar rules remain.

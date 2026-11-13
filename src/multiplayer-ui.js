@@ -325,6 +325,7 @@ export function mountMultiplayer({
         receivedAt = now();
         sync.push(message, receivedAt, client.slot);
         canvas.hidden = false;
+        $("duel-field").hidden = false;
         $("duel-drag-area").hidden = false;
         $("duel-hud").hidden = false;
         $("duel-action").hidden = false;
@@ -441,6 +442,7 @@ export function mountMultiplayer({
     $("duel-bonuses").replaceChildren();
     $("duel-bonuses").hidden = true;
     canvas.hidden = true;
+    $("duel-field").hidden = true;
     $("duel-drag-area").hidden = true;
     $("duel-hud").hidden = true;
     $("duel-action").hidden = true;
@@ -818,6 +820,7 @@ export function mountMultiplayer({
         (available * R.width) / R.height,
       );
       canvas.style.width = `${Math.floor(width)}px`;
+      $("duel-field").style.width = canvas.style.width;
       canvas.style.height = `${Math.floor((width * R.height) / R.width)}px`;
       $("duel-drag-area").style.width = canvas.style.width;
       const stale = !result && now() - receivedAt > 250;

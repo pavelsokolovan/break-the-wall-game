@@ -46,8 +46,25 @@ function player(slot) {
 
 // Sweep an approaching circle against the front face and rounded front corners.
 // Relative x removes the paddle's linear motion over this microstep.
-function paddleContact(x, y, dx, dy, halfWidth, radius, face) {
-  if (dy <= 0 || y > face + EPS) return null;
+function paddleContact(
+  x,
+  y,
+  dx,
+  dy,
+  halfWidth,
+  radius,
+  face,
+  directPlacement = false,
+) {
+  if (dy <= 0) return null;
+  // A direct pointer jump may arrive while the approaching circle already
+  // overlaps the solid paddle body. Resolve that overlap, not a cross-field sweep.
+  if (directPlacement) {
+    const px = clamp(x, -halfWidth, halfWidth);
+    const py = clamp(y, face, face + R.paddleHeight);
+    if ((x - px) ** 2 + (y - py) ** 2 <= radius ** 2 + EPS) return 0;
+  }
+  if (y > face + EPS) return null;
   // A moving paddle can enter the ball's front half while it already overlaps the
   // front face. A negative sweep root must not discard this valid contact.
   const nearestX = clamp(x, -halfWidth, halfWidth);
@@ -745,6 +762,7 @@ export class DuelGame {
             p.width / 2,
             b.r,
             R.paddleTopY[0],
+            this.directContactSlots?.has(slot) ?? false,
           );
           if (t !== null)
             consider({ ball: b, targetId: -4 + slot, kind: "paddle", t, slot });
@@ -912,8 +930,10 @@ export class DuelGame {
     }
     this.updatePowerTimers();
     this.updateCombos();
+    this.directContactSlots = new Set();
     for (const p of this.state.players) {
       if (this.directTargets[p.slot] !== null) {
+        this.directContactSlots.add(p.slot);
         p.x = clamp(
           this.directTargets[p.slot],
           p.width / 2,

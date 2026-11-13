@@ -601,3 +601,21 @@ test("direct local paddle follows the finger immediately and does not ease back 
     );
   }
 });
+
+test("direct paddle uses latest confirmed width instead of an older wide-paddle sample", () => {
+  const sync = new DuelSync({
+    predictLocal: false,
+    directLocal: true,
+    interpolationMs: 50,
+  });
+  const a = snapshot(1000),
+    b = snapshot(1033);
+  a.state.players[0].width = 240;
+  b.state.players[0].width = 100;
+  sync.push(a, 1000, 0);
+  sync.setTarget(0, 1000);
+  sync.push(b, 1033, 0);
+  const paddle = sync.frame(1033).snapshot.state.players[0];
+  assert.equal(paddle.width, 100);
+  assert.equal(paddle.x, 50);
+});

@@ -1173,3 +1173,27 @@ test("bonus bar shows only local active powers, updates strips without recreatin
   assert(bar.hidden);
   assert.equal(bar.children.length, 0);
 });
+
+test("bonus indicators are children of the field overlay and are removed from room setup", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  const s = snapshot();
+  s.state.players[0].wideRemainingMs = 8000;
+  socket.receive(s);
+  assert.equal(f.$("duel-bonuses").parentElement, f.$("duel-field"));
+  assert.equal(f.$("duel-game").parentElement, f.$("duel-field"));
+  assert(!f.$("duel-field").hidden);
+  assert(!f.$("duel-bonuses").hidden);
+  socket.receive({
+    type: "result",
+    matchId: "m",
+    winner: 0,
+    reason: "forfeit",
+    goals: [1, 0],
+    points: [0, 0],
+    durationMs: 1000,
+    waveCount: 1,
+  });
+  await f.ui.leave();
+  assert(f.$("duel-field").hidden);
+});

@@ -604,3 +604,59 @@ test("direct pointer targets snap before collision testing without sweeping acro
   g.step();
   assert.equal(g.state.players[0].x, 650);
 });
+
+test("direct placement catches an approaching ball overlapping the full paddle body at both ends", () => {
+  for (const slot of [0, 1])
+    for (const offset of [3, 10, 20]) {
+      const g = playing(),
+        sign = slot === 0 ? 1 : -1;
+      const face =
+        slot === 0 ? R.paddleTopY[0] : R.paddleTopY[1] + R.paddleHeight;
+      g.state.players[slot].x = 200;
+      g.state.balls = [
+        ball(g, {
+          x: 600,
+          y: face + sign * offset,
+          vy: sign * 360,
+          vx: 0,
+          owner: 1 - slot,
+        }),
+      ];
+      g.applyInput(slot, {
+        seq: 1,
+        x: slot === 0 ? 0.75 : 0.25,
+        action: "none",
+        direct: true,
+      });
+      g.step();
+      assert.equal(g.state.balls[0].owner, slot);
+      assert(g.state.balls[0].vy * sign < 0);
+      assert.deepEqual(g.state.goals, [0, 0]);
+    }
+});
+test("direct placement cannot rescue a ball clear of the paddle or one already scored", () => {
+  for (const slot of [0, 1]) {
+    const g = playing(),
+      sign = slot === 0 ? 1 : -1,
+      face = slot === 0 ? R.paddleTopY[0] : R.paddleTopY[1] + R.paddleHeight;
+    g.state.balls = [
+      ball(g, {
+        x: 600,
+        y: face + sign * (R.paddleHeight + R.ballRadius + 2),
+        vy: sign * 360,
+        vx: 0,
+      }),
+    ];
+    g.applyInput(slot, {
+      seq: 1,
+      x: slot === 0 ? 0.75 : 0.25,
+      action: "none",
+      direct: true,
+    });
+    g.step();
+    assert(g.state.balls[0].vy * sign > 0);
+    Object.assign(g.state.balls[0], { y: slot === 0 ? 1011 : -11 });
+    g.step();
+    assert.equal(g.state.goals[1 - slot], 1);
+  }
+});

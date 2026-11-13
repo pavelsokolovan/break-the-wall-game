@@ -1378,3 +1378,34 @@ test(
     );
   },
 );
+
+test(
+  "direct input arriving after the front plane still catches a ball overlapping the paddle body",
+  { timeout: 10000 },
+  async (t) => {
+    const f = await fixture(t),
+      { a, b, code } = await f.room();
+    a.send({ type: "ready", ready: true });
+    b.send({ type: "ready", ready: true });
+    await a.next("snapshot");
+    await f.advance(180);
+    const game = f.app.manager.rooms.get(code).game;
+    game.state.players[0].x = 200;
+    Object.assign(game.state.balls[0], {
+      x: 600,
+      y: 925,
+      vx: 0,
+      vy: 360,
+      owner: 1,
+    });
+    a.send({ type: "input", seq: 1, x: 0.75, direct: true, action: "none" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await f.advance(1);
+    const caught = await a.next(
+      "snapshot",
+      (s) => s.tick === 181 && s.state.balls[0].vy < 0,
+    );
+    assert.equal(caught.state.players[0].x, 600);
+    assert.deepEqual(caught.state.goals, [0, 0]);
+  },
+);

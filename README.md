@@ -208,3 +208,8 @@ and collision authority. See [response settings](docs/DUEL_RESPONSE_SPEED.md).
 Current touch controls and stable HUD sizing are described in
 [DUEL_DIRECT_POINTER.md](docs/DUEL_DIRECT_POINTER.md). Both server and frontend need
 the direct-placement update to remove the finger movement ramp.
+
+Duel bonuses now appear as translucent, touch-through indicators inside the field,
+so collecting/expiring powers cannot change field size. Direct pointer placements also
+resolve contact with a ball still overlapping the solid paddle body; see
+[contact/overlay follow-up](docs/DUEL_BODY_CONTACT_AND_OVERLAY.md).
