@@ -1271,3 +1271,72 @@ body:has(#duel-panel:not([hidden])) main {
 #duel-drag-area[hidden] {
   display: none;
 }
+
+/* Room setup has large touch targets; active play keeps its compact toolbar. */
+#duel-connect {
+  display: grid;
+  gap: 14px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 12px 0;
+  text-align: left;
+}
+#duel-connect[hidden] {
+  display: none;
+}
+.duel-start-choice {
+  padding: 14px;
+  background: #10101b;
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.duel-start-choice h3,
+.duel-start-choice label {
+  display: block;
+  font:
+    26px "VT323",
+    monospace;
+  margin: 0 0 8px;
+  color: var(--lime);
+}
+#duel-connect .duel-start-choice p {
+  font:
+    20px "VT323",
+    monospace;
+  margin: 0 0 12px;
+}
+body:has(#duel-panel:not([hidden])) #duel-connect button {
+  min-height: 48px;
+  padding: 12px;
+  font-size: 12px;
+  width: 100%;
+}
+.duel-join-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+#duel-connect #duel-code {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  min-height: 48px;
+  font-size: 28px;
+  padding: 8px;
+}
+body:has(#duel-panel:not([hidden])) .duel-join-row #duel-join {
+  width: auto;
+  flex: 1;
+}
+body:has(#duel-panel:not([hidden])) #duel-ready {
+  min-height: 44px;
+  font-size: 12px;
+  padding: 10px 16px;
+}
+#duel-panel:not(:has(#duel-game:not([hidden]))) #duel-status {
+  font-size: 22px;
+  margin: 8px 0;
+}
+#duel-panel:not(:has(#duel-game:not([hidden]))) #duel-slots {
+  font-size: 22px;
+}

@@ -89,27 +89,29 @@
           <h2>ONLINE DUEL <span id="duel-room-code"></span></h2>
           <p id="duel-status" role="status" aria-live="polite"></p>
           <form id="duel-connect" class="duel-connect">
-            <button id="duel-create" type="button">CREATE ROOM</button>
-            <button id="duel-practice" type="button">TEST VS BOT</button>
-            <label for="duel-code">ROOM CODE</label>
-            <input
-              id="duel-code"
-              maxlength="6"
-              autocomplete="off"
-              autocapitalize="characters"
-              spellcheck="false"
-              placeholder="ABC234"
-            />
-            <button id="duel-join" type="submit">JOIN ROOM</button>
-            <p>
-              First to five goals. Break walls, catch your rewards, and dodge
-              your hazards. Repair fixes damage; armor protects against hazards,
-              not goals. Serves are automatic. Sticky holds balls up to three
-              seconds; tap or Space releases and fires. F fires only. Two balls
-              start each round, one per player. Returns capture ownership. Lost
-              balls return to your paddle and launch after one second; the other
-              ball keeps moving.
-            </p>
+            <section class="duel-start-choice" aria-label="Host a game">
+              <h3>Play with a friend</h3>
+              <p>Create a room, then share its code.</p>
+              <button id="duel-create" type="button">CREATE ROOM</button>
+            </section>
+            <section class="duel-start-choice" aria-label="Join a game">
+              <label for="duel-code">Have a room code?</label>
+              <div class="duel-join-row">
+                <input
+                  id="duel-code"
+                  maxlength="6"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  placeholder="ABC234"
+                />
+                <button id="duel-join" type="submit">JOIN ROOM</button>
+              </div>
+            </section>
+            <section class="duel-start-choice" aria-label="Practice">
+              <h3>Playing on your own?</h3>
+              <button id="duel-practice" type="button">TEST VS BOT</button>
+            </section>
           </form>
           <div class="duel-room-actions">
             <button id="duel-cancel" type="button" hidden>CANCEL</button>

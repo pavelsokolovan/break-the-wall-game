@@ -163,6 +163,15 @@ export function mountMultiplayer({
           ? "NOT READY"
           : "READY";
         controls();
+        if (message.phase === "lobby") {
+          status(
+            message.players.every((p) => p.connected)
+              ? message.practice
+                ? "Press Ready to start against the bot."
+                : "Press Ready to start. Both players must be ready."
+              : "Share this room code with your friend, then press Ready.",
+          );
+        }
         if (message.phase === "reconnecting") {
           inactive();
           status("Waiting for the other player to reconnect…");
@@ -344,7 +353,7 @@ export function mountMultiplayer({
           url
             ? invited
               ? `Invitation to ${invited}. Press Join Room to enter.`
-              : "Create a room or enter a friend’s code."
+              : "Choose how to play."
             : "Online Duel is unavailable here. A multiplayer server must be configured. Solo is ready to play.",
         );
       if (raf === null) {
@@ -414,7 +423,7 @@ export function mountMultiplayer({
     )
       return;
     await leave();
-    status("Create a room or enter a friend’s code.");
+    status("Choose how to play.");
   };
   function queueAction(type) {
     if (
