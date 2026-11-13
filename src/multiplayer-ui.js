@@ -69,6 +69,59 @@ export function mountMultiplayer({
       predictLocal: false,
     });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
+  function bonusEntries(player) {
+    const entries = [];
+    for (const [key, name, total] of [
+      ["wideRemainingMs", "WIDE", 12000],
+      ["slowRemainingMs", "SLOW", 10000],
+      ["shieldRemainingMs", "SHIELD", 15000],
+    ]) {
+      if (
+        player[key] > 0 &&
+        (key !== "shieldRemainingMs" || player.shieldCharges > 0)
+      )
+        entries.push({
+          key,
+          label: `${name}${name === "SHIELD" ? " ×" + player.shieldCharges : ""} ${Math.ceil(player[key] / 1000)}s`,
+          ratio: Math.min(1, player[key] / total),
+        });
+    }
+    for (const [key, name] of [
+      ["vestCharges", "VEST"],
+      ["stickyCharges", "STICKY"],
+      ["ammo", "AMMO"],
+    ])
+      if (player[key] > 0)
+        entries.push({ key, label: `${name} ×${player[key]}` });
+    return entries;
+  }
+  function showBonuses(player) {
+    const bar = $("duel-bonuses"),
+      entries = bonusEntries(player);
+    const activeKeys = new Set(entries.map((e) => e.key));
+    for (const node of [...bar.children])
+      if (!activeKeys.has(node.dataset.bonus)) node.remove();
+    for (const entry of entries) {
+      let node = [...bar.children].find((n) => n.dataset.bonus === entry.key);
+      if (!node) {
+        node = doc.createElement("div");
+        node.className = "duel-bonus";
+        node.dataset.bonus = entry.key;
+        node.append(doc.createElement("span"));
+        if (entry.ratio !== undefined) {
+          const strip = doc.createElement("i");
+          strip.className = "duel-bonus-time";
+          strip.setAttribute("aria-hidden", "true");
+          node.append(strip);
+        }
+        bar.append(node);
+      }
+      node.firstElementChild.textContent = entry.label;
+      if (entry.ratio !== undefined)
+        node.lastElementChild.style.width = `${entry.ratio * 100}%`;
+    }
+    bar.hidden = !entries.length;
+  }
   function status(text) {
     $("duel-status").textContent = text;
   }
@@ -273,6 +326,7 @@ export function mountMultiplayer({
         $("duel-hud").hidden = false;
         $("duel-action").hidden = false;
         const local = message.state.players[client.slot];
+        showBonuses(local);
         const held = message.state.balls.some(
           (b) => b.held && b.owner === client.slot,
         );
@@ -381,6 +435,8 @@ export function mountMultiplayer({
     $("duel-room-code").textContent = "";
     $("duel-slots").textContent = "";
     $("duel-slots").hidden = false;
+    $("duel-bonuses").replaceChildren();
+    $("duel-bonuses").hidden = true;
     canvas.hidden = true;
     $("duel-drag-area").hidden = true;
     $("duel-hud").hidden = true;
@@ -864,6 +920,15 @@ export function mountMultiplayer({
     } else
       body.textContent =
         "First to five goals; brick points do not break ties. Matches end after 15 minutes of active play. Move with drag, mouse, arrows or A/D. Tap your paddle or Space to release held balls and fire; F fires only. Sticky holds for three seconds; bazooka stores up to fifteen shots; two balls stay in play. Returning a ball captures it. A lost ball returns to the conceding paddle and launches after one second, or tap to release sooner. The other ball keeps moving. First to five with a lead wins; simultaneous tied goals continue. Multiball is replaced by gems. Gems give points; Wide and Slow help returns; Repair fixes damage. Shield and Vest stop hazards, never goals. Your drops travel toward you. Pause, panels and background share one 30-second pause per player per rally. Both players must consent to resume, or the timer expires. Panels do not stop play after the pause budget expires.";
+    if (kind === "legend" && snapshot) {
+      const details = doc.createElement("p");
+      details.textContent =
+        "Opponent bonuses: " +
+        (bonusEntries(snapshot.state.players[1 - client.slot])
+          .map((e) => e.label)
+          .join(" · ") || "None");
+      body.append(details);
+    }
     $("duel-info").hidden = false;
     $("duel-info-close").focus();
     controls();

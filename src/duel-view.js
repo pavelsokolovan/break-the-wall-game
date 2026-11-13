@@ -81,27 +81,6 @@ export function drawDuel(canvas, snapshot, slot, { motion = true } = {}) {
       ctx.lineWidth = 2;
       ctx.strokeRect(rect.x - 4, rect.y - 4, rect.w + 8, rect.h + 8);
     }
-    const labels = [];
-    if (p.stickyCharges) labels.push(`STICK ${p.stickyCharges}`);
-    if (p.ammo) labels.push(`AMMO ${p.ammo}`);
-    const held = snapshot.state.balls.filter(
-      (b) => b.held && b.owner === p.slot,
-    );
-    if (held.length)
-      labels.push(
-        `HELD ${held.length} ${Math.ceil(Math.min(...held.map((b) => b.autoReleaseRemainingMs)) / 1000)}s`,
-      );
-    if (p.wideRemainingMs > 0)
-      labels.push(`WIDE ${Math.ceil(p.wideRemainingMs / 1000)}s`);
-    if (p.slowRemainingMs > 0)
-      labels.push(`SLOW ${Math.ceil(p.slowRemainingMs / 1000)}s`);
-    if (p.shieldCharges)
-      labels.push(`SHIELD ${Math.ceil(p.shieldRemainingMs / 1000)}s`);
-    if (p.vestCharges) labels.push(`VEST ${p.vestCharges}`);
-    ctx.font = '18px "VT323", monospace';
-    ctx.fillStyle = color;
-    ctx.textAlign = "center";
-    ctx.fillText(labels.join(" · "), 400, p.slot === slot ? 972 : 45);
   }
   for (const shot of snapshot.state.shots)
     drawShot(

@@ -1136,3 +1136,40 @@ test("centered result announces win/loss/draw and offers working rematch and lea
     assert(f.$("duel-result").hidden);
   }
 });
+
+test("bonus bar shows only local active powers, updates strips without recreating cards, and removes expired powers", async (t) => {
+  const f = fixture(t),
+    socket = await f.join();
+  const s = snapshot();
+  Object.assign(s.state.players[0], {
+    wideRemainingMs: 8000,
+    stickyCharges: 3,
+    ammo: 5,
+  });
+  s.state.players[1].vestCharges = 2;
+  socket.receive(s);
+  const bar = f.$("duel-bonuses");
+  assert(!bar.hidden);
+  assert.match(bar.textContent, /WIDE 8s/);
+  assert.match(bar.textContent, /STICKY ×3/);
+  assert.match(bar.textContent, /AMMO ×5/);
+  assert(!bar.textContent.includes("VEST"));
+  const card = bar.querySelector('[data-bonus="wideRemainingMs"]');
+  assert.equal(card.lastElementChild.style.width, `${(8000 / 12000) * 100}%`);
+  s.tick++;
+  s.serverTime += 50;
+  s.state.players[0].wideRemainingMs = 7000;
+  socket.receive(s);
+  assert.equal(bar.querySelector('[data-bonus="wideRemainingMs"]'), card);
+  assert.match(card.textContent, /7s/);
+  Object.assign(s.state.players[0], {
+    wideRemainingMs: 0,
+    stickyCharges: 0,
+    ammo: 0,
+  });
+  s.tick++;
+  s.serverTime += 50;
+  socket.receive(s);
+  assert(bar.hidden);
+  assert.equal(bar.children.length, 0);
+});

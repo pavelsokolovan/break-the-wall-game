@@ -1487,3 +1487,46 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
   flex-shrink: 0;
   border-width: 4px;
 }
+
+.duel-bonuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  margin: 5px auto;
+  max-width: 800px;
+}
+.duel-bonuses[hidden] {
+  display: none;
+}
+.duel-bonus {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 9px 9px;
+  border: 1px solid #606279;
+  background: #17192b;
+  color: #f5ffe3;
+  font:
+    700 16px system-ui,
+    sans-serif;
+  line-height: 1.2;
+  animation: bonus-pickup 0.6s ease-out;
+}
+.duel-bonus-time {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: var(--lime);
+}
+@keyframes bonus-pickup {
+  from {
+    background: #56632b;
+    border-color: var(--lime);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .duel-bonus {
+    animation: none;
+  }
+}
