@@ -190,6 +190,7 @@ const clientSchemas = {
   resume: { requestId, code, token },
   ready: { ready: bool },
   input: {
+    direct: optional(bool),
     matchId: optional(matchId),
     seq: positive,
     x: number(0, 1),

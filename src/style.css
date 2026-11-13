@@ -1530,3 +1530,78 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
     animation: none;
   }
 }
+
+/* Reserve live HUD geometry so server acknowledgements and bonus changes never
+   change the canvas bounds or touch-coordinate mapping. */
+#duel-panel.duel-in-match {
+  position: relative;
+}
+#duel-panel.duel-in-match #duel-status {
+  display: block;
+  height: 28px;
+  margin: 3px 0;
+  line-height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 16px;
+}
+#duel-panel.duel-in-match > .duel-room-actions:has(#duel-leave) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, 36px);
+  height: 76px;
+  gap: 4px;
+  margin: 2px 0;
+}
+#duel-panel.duel-in-match > .duel-room-actions:has(#duel-leave) button {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  padding: 3px;
+  font-size: 10px;
+  overflow: hidden;
+}
+#duel-panel.duel-in-match #duel-hud {
+  height: 24px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  margin: 0;
+  padding: 2px 0;
+  font-size: 16px;
+  gap: 8px;
+}
+#duel-panel.duel-in-match #duel-bonuses {
+  display: flex;
+  visibility: visible;
+  height: 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: flex-start;
+  margin: 4px 0;
+}
+#duel-panel.duel-in-match #duel-bonuses[hidden] {
+  visibility: hidden;
+}
+#duel-panel.duel-in-match .duel-bonus {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+#duel-panel.duel-in-match #duel-loading:not([hidden]) {
+  position: absolute;
+  z-index: 12;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, 95%);
+  box-sizing: border-box;
+  margin: 0;
+}
+#duel-panel.duel-in-match:has(#duel-loading:not([hidden])) #duel-status {
+  display: block;
+  visibility: hidden;
+}

@@ -554,6 +554,24 @@ try {
     );
     assert(fits, "Portrait controls overflow viewport");
   }
+  const geometry = await evaluate(
+    a,
+    `(()=>{
+    const field=document.getElementById('duel-game'), action=document.getElementById('duel-action'), bonuses=document.getElementById('duel-bonuses'), status=document.getElementById('duel-status'), loading=document.getElementById('duel-loading');
+    const original={action:action.textContent,hidden:bonuses.hidden,html:bonuses.innerHTML,status:status.textContent,loading:loading.hidden};
+    const before=field.getBoundingClientRect().toJSON();
+    action.textContent='RELEASE / FIRE (15)';status.textContent='Waiting for the server to finish a very long connection request';
+    bonuses.hidden=false;bonuses.innerHTML='<div class="duel-bonus">SHIELD ×1 15s</div><div class="duel-bonus">STICKY ×3</div><div class="duel-bonus">AMMO ×15</div><div class="duel-bonus">WIDE 12s</div>';loading.hidden=false;
+    const after=field.getBoundingClientRect().toJSON();
+    action.textContent=original.action;bonuses.hidden=original.hidden;bonuses.innerHTML=original.html;status.textContent=original.status;loading.hidden=original.loading;
+    return {before,after};
+  })()`,
+  );
+  assert.deepEqual(
+    geometry.after,
+    geometry.before,
+    "Live toolbar/bonus/loading changes resized the field",
+  );
   const portrait = await command(
     "Page.captureScreenshot",
     { format: "png" },

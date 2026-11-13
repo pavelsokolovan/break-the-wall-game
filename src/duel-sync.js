@@ -58,7 +58,9 @@ export class DuelSync {
     correctionMs = 80,
     authoritativeContact = false,
     predictLocal = true,
+    directLocal = false,
   } = {}) {
+    this.directLocal = directLocal;
     this.predictLocal = predictLocal;
     this.authoritativeContact = authoritativeContact;
     this.interpolationMs = interpolationMs;
@@ -278,6 +280,16 @@ export class DuelSync {
           }
         }
       }
+    }
+    if (
+      this.directLocal &&
+      this.desired !== null &&
+      connected &&
+      !stale &&
+      snapshot.phase === "playing"
+    ) {
+      const p = snapshot.state.players[this.slot];
+      p.x = clamp(this.desired, p.width / 2, R.width - p.width / 2);
     }
     for (const b of snapshot.state.balls)
       if (b.held) {

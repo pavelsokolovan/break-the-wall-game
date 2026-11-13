@@ -48,3 +48,8 @@ No push or deployment was performed for this change.
 Speed-profile update: the buffer is now 16.67ms and periodic snapshots 30Hz; see
 [DUEL_RESPONSE_SPEED.md](DUEL_RESPONSE_SPEED.md). Coherent authoritative presentation
 and immediate paddle-contact snapshots are retained.
+
+Pointer-control preference update: DUEL_DIRECT_POINTER.md supersedes the authoritative-
+only local paddle view. Finger control is now immediate locally and uses direct server
+placement on receipt; balls and remote paddles remain authoritative. This intentionally
+prioritizes immediate finger response over hiding the remaining network transit gap.

@@ -580,3 +580,27 @@ test("approaching front-edge overlap is caught at either paddle; backside overla
       assert.deepEqual(g.state.goals, [0, 0]);
     }
 });
+
+test("direct pointer targets snap before collision testing without sweeping across intervening balls", () => {
+  const g = playing();
+  g.state.players[0].x = 200;
+  g.state.balls = [ball(g, { x: 650, y: 905, vy: 360, vx: 0 })];
+  assert(
+    g.applyInput(0, { seq: 1, x: 650 / 800, action: "none", direct: true }),
+  );
+  g.step();
+  assert.equal(g.state.players[0].x, 650);
+  assert.equal(g.state.players[0].vx, 0);
+  assert(g.state.balls[0].vy < 0);
+  const miss = playing();
+  miss.state.players[0].x = 200;
+  miss.state.balls = [ball(miss, { x: 400, y: 905, vy: 360, vx: 0 })];
+  miss.applyInput(0, { seq: 1, x: 650 / 800, action: "none", direct: true });
+  miss.step();
+  assert(miss.state.balls[0].vy > 0);
+  g.applyInput(0, { seq: 2, x: 0, action: "none", direct: true });
+  g.setPaused(true);
+  g.setPaused(false);
+  g.step();
+  assert.equal(g.state.players[0].x, 650);
+});

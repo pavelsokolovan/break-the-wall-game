@@ -576,3 +576,28 @@ test("client negotiates 60Hz inputs and falls back safely for older servers", as
   await f.timers.advance(17);
   assert(!f.client.input(0.6));
 });
+
+test("direct local paddle follows the finger immediately and does not ease back on old snapshots", () => {
+  for (const slot of [0, 1]) {
+    const sync = new DuelSync({ predictLocal: false, directLocal: true });
+    const a = snapshot(1000);
+    sync.push(a, 1000, slot);
+    sync.setTarget(0.8, 1000);
+    near(
+      sync.frame(1000).snapshot.state.players[slot].x,
+      slot === 0 ? 640 : 160,
+    );
+    const old = snapshot(1033);
+    old.state.players[slot].x = 400;
+    sync.push(old, 1033, slot);
+    near(
+      sync.frame(1033).snapshot.state.players[slot].x,
+      slot === 0 ? 640 : 160,
+    );
+    sync.setTarget(0, 1033);
+    assert.equal(
+      sync.frame(1033).snapshot.state.players[slot].x,
+      slot === 0 ? 80 : 720,
+    );
+  }
+});

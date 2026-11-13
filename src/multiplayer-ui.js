@@ -33,6 +33,7 @@ export function mountMultiplayer({
     snapshot = null,
     result = null,
     receivedAt = 0,
+    directInput = false,
     target = null,
     action = "none",
     raf = null,
@@ -67,6 +68,7 @@ export function mountMultiplayer({
       interpolationMs: 1000 / 60,
       correctionMs: 40,
       predictLocal: false,
+      directLocal: true,
     });
   const motionQuery = win.matchMedia?.("(prefers-reduced-motion: reduce)");
   function bonusEntries(player) {
@@ -148,6 +150,7 @@ export function mountMultiplayer({
   }
   function controls() {
     const busy = pending || leaving || client.recovering || !!waitingControl;
+    $("duel-panel").classList.toggle("duel-in-match", !!snapshot);
     $("duel-loading").hidden = !busy;
     $("duel-panel").setAttribute("aria-busy", String(busy));
     $("duel-loading-text").textContent =
@@ -609,9 +612,10 @@ export function mountMultiplayer({
     };
   }
   function aim(e) {
+    directInput = true;
     target = Math.max(0, Math.min(1, position(e).x / R.width));
     sync.setTarget(target, now());
-    if (now() - receivedAt <= 250) client.input(target);
+    if (now() - receivedAt <= 250) client.input(target, "none", true);
   }
   let dragId = null;
   const dragArea = $("duel-drag-area");
@@ -672,7 +676,9 @@ export function mountMultiplayer({
         pos.y >= 892 &&
         pos.y <= 954,
     };
+    directInput = true;
     target = Math.max(0, Math.min(1, pos.x / R.width));
+    sync.setTarget(target, now());
     canvas.setPointerCapture(e.pointerId);
     canvas.focus({ preventScroll: true });
     onUserGesture();
@@ -684,8 +690,11 @@ export function mountMultiplayer({
       !doc.hidden &&
       snapshot?.phase === "playing" &&
       (e.pointerType === "mouse" || tap?.id === e.pointerId)
-    )
+    ) {
+      directInput = true;
       target = Math.max(0, Math.min(1, position(e).x / R.width));
+      sync.setTarget(target, now());
+    }
   });
   canvas.addEventListener("pointerup", (e) => {
     if (tap?.id === e.pointerId) {
@@ -838,8 +847,12 @@ export function mountMultiplayer({
           (keys.has("arrowright") || keys.has("d") ? 1 : 0) -
           (keys.has("arrowleft") || keys.has("a") ? 1 : 0);
         const p = snapshot.state.players[client.slot];
-        const localX = sync.local?.x ?? p.x;
+        const localX =
+          directInput && sync.desired !== null
+            ? sync.desired
+            : (sync.local?.x ?? p.x);
         const viewX = client.slot === 0 ? localX : R.width - localX;
+        if (direction) directInput = false;
         if (direction)
           target = Math.max(
             p.width / 2 / R.width,
@@ -852,7 +865,7 @@ export function mountMultiplayer({
         if (target !== null) sync.setTarget(target, now());
         if (
           (target !== null || action !== "none") &&
-          client.input(target ?? viewX / R.width, action)
+          client.input(target ?? viewX / R.width, action, directInput)
         ) {
           action = "none";
           if (!direction) target = null;

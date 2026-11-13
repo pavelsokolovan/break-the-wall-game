@@ -140,8 +140,8 @@ and shows an interruption.
 
 The private seat token is kept in this tab's session storage, separately from Solo
 saves. After a reload, select Online Duel to attempt recovery on the same backend.
-Selecting Solo or leaving clears that identity and cancels recovery. Paddles and balls
-are displayed on the same interpolated server timeline; collisions, actions and scores
+Selecting Solo or leaving clears that identity and cancels recovery. Finger input now moves your local paddle immediately; balls and remote paddles
+use the authoritative server timeline; collisions, actions and scores
 remain authoritative on the server. Stale state freezes movement and disables actions.
 
 For LAN development, copy `.env.example` to `.env` and add the frontend's actual LAN
@@ -204,3 +204,7 @@ local paddle prediction and immediate server contact snapshots.
 Duel response now uses negotiated inputs up to 60Hz, authoritative snapshots at 30Hz,
 a one-frame render buffer and a 50% faster paddle travel cap. Balls retain their speeds
 and collision authority. See [response settings](docs/DUEL_RESPONSE_SPEED.md).
+
+Current touch controls and stable HUD sizing are described in
+[DUEL_DIRECT_POINTER.md](docs/DUEL_DIRECT_POINTER.md). Both server and frontend need
+the direct-placement update to remove the finger movement ramp.

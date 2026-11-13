@@ -110,6 +110,7 @@ export class DuelGame {
     this.countdownTicks = 0;
     this.result = null;
     this.pendingWall = null;
+    this.directTargets = [null, null];
     this.comboUntil = [0, 0];
     this.pendingActions = [
       { release: false, fire: false },
@@ -140,12 +141,14 @@ export class DuelGame {
     )
       return false;
     p.targetX = viewInputToWorldX(slot, x);
+    this.directTargets[slot] = input.direct === true ? p.targetX : null;
     p.lastAckInputSeq = seq;
     if (action === "release_fire") this.pendingActions[slot].release = true;
     if (action !== "none") this.pendingActions[slot].fire = true;
     return true;
   }
   clearMovement() {
+    this.directTargets = [null, null];
     this.pendingActions = [
       { release: false, fire: false },
       { release: false, fire: false },
@@ -236,6 +239,7 @@ export class DuelGame {
     this.phase = "playing";
   }
   resetRally() {
+    this.directTargets = [null, null];
     this.comboUntil = [0, 0];
     this.pendingActions = [
       { release: false, fire: false },
@@ -908,6 +912,18 @@ export class DuelGame {
     }
     this.updatePowerTimers();
     this.updateCombos();
+    for (const p of this.state.players) {
+      if (this.directTargets[p.slot] !== null) {
+        p.x = clamp(
+          this.directTargets[p.slot],
+          p.width / 2,
+          R.width - p.width / 2,
+        );
+        p.targetX = p.x;
+        p.vx = 0;
+        this.directTargets[p.slot] = null;
+      }
+    }
     const starts = this.state.players.map((p) => p.x);
     for (const p of this.state.players) {
       const target = clamp(p.targetX, p.width / 2, R.width - p.width / 2);

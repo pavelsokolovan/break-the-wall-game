@@ -283,7 +283,7 @@ export class OnlineClient {
         this.lost("Not connected. Try again.");
     });
   }
-  input(x, action = "none") {
+  input(x, action = "none", direct = false) {
     if (
       this.recovering ||
       !Number.isFinite(x) ||
@@ -298,6 +298,7 @@ export class OnlineClient {
     if (
       !this.send({
         type: "input",
+        ...(direct ? { direct: true } : {}),
         ...(this.matchId ? { matchId: this.matchId } : {}),
         seq,
         x,
