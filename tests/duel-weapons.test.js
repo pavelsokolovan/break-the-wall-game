@@ -375,7 +375,7 @@ test("any shooter can intercept every hazard owner for unmultiplied points befor
   assert.equal(g.state.players[0].points, 100);
   assert.equal(g.state.drops.length, 0);
 });
-test("each shot hits only one target and never damages prizes, balls, paddles or goals", () => {
+test("each shot hits only one target and never damages prizes, balls or goals", () => {
   const g = game();
   g.state.drops = [
     drop(g, "bomb", 0, { y: 866 }),
@@ -394,7 +394,9 @@ test("each shot hits only one target and never damages prizes, balls, paddles or
   ticks(safe, 100);
   assert.deepEqual(safe.state.balls[0], before);
   assert.equal(safe.state.drops[0].type, "gem");
-  assert(safe.state.players.every((p) => p.damage === 0 && p.points === 0));
+  assert.equal(safe.state.players[1].damage, 1);
+  assert.equal(safe.state.players[0].damage, 0);
+  assert(safe.state.players.every((p) => p.points === 0));
   assert.deepEqual(safe.state.goals, [0, 0]);
 });
 test("two shooters resolve chronologically then by shot ID at ties, independent of array order", () => {
@@ -511,4 +513,64 @@ test("mixed seeded power/action replay is deterministic and bounded", () => {
   assert(shotsObserved);
   validate(a);
   validate(b);
+});
+
+test("cannon hits hurt only the opposing paddle and respect shield, vest and invulnerability", () => {
+  for (const owner of [0, 1])
+    for (const defense of ["none", "shield", "vest", "invulnerability"]) {
+      const g = game(),
+        target = g.state.players[1 - owner],
+        shooter = g.state.players[owner];
+      const width = target.width;
+      if (defense === "shield") {
+        target.shieldCharges = 1;
+        target.shieldRemainingMs = 15000;
+      }
+      if (defense === "vest") target.vestCharges = 2;
+      if (defense === "invulnerability")
+        target.invulnerabilityRemainingMs = 1000;
+      g.state.shots = [shot(g, owner, { y: owner === 0 ? 100 : 900 })];
+      g.step();
+      assert.equal(g.state.shots.length, 0);
+      assert.equal(target.damage, defense === "none" ? 1 : 0);
+      assert.equal(target.width, defense === "none" ? width - 20 : width);
+      assert.equal(shooter.damage, 0);
+      if (defense === "shield") assert.equal(target.shieldCharges, 0);
+      if (defense === "vest") assert.equal(target.vestCharges, 1);
+      assert.deepEqual(g.state.goals, [0, 0]);
+      assert(g.state.players.every((p) => p.points === 0));
+      const events = g.drainEvents();
+      assert(
+        events.some(
+          (e) =>
+            e.type ===
+              (defense === "none" ? "hazard_damage" : "hazard_blocked") &&
+            e.owner === 1 - owner,
+        ),
+      );
+      validate(g);
+    }
+});
+test("cannon can miss and moving-paddle contacts use its position at shot impact", () => {
+  for (const owner of [0, 1]) {
+    const miss = game();
+    miss.state.shots = [
+      shot(miss, owner, { x: 100, y: owner === 0 ? 100 : 900 }),
+    ];
+    ticks(miss, 20);
+    assert.equal(miss.state.shots.length, 0);
+    assert(miss.state.players.every((p) => p.damage === 0));
+    const moving = game(),
+      p = moving.state.players[1 - owner];
+    p.x = 300;
+    p.targetX = 600;
+    // Contact in the last third of the tick, after paddle travels right toward the shot.
+    moving.state.shots = [
+      shot(moving, owner, { x: 400, y: owner === 0 ? 100 : 900 }),
+    ];
+    moving.step();
+    assert.equal(p.damage, 1);
+    assert.equal(moving.state.shots.length, 0);
+    validate(moving);
+  }
 });

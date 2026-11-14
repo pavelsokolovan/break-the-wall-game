@@ -4,7 +4,7 @@ Separate additional mode; existing Solo and two-player Duel retain their rules, 
 protocol, saves and controls. Create a room for three or four players. Three-player
 rooms use bottom/right/top paddles and a solid left wall; four-player rooms use all sides.
 All participants ready before a shared countdown. Each starts with five lives and one
-ball. Balls traverse the whole square and pass through each other. Returns transfer
+ball. Balls traverse the whole square and bounce elastically off each other. Returns transfer
 ownership and brick points. Central bricks are square. Missing your side costs a life
 and respawns that ball at your paddle. At zero lives your side becomes a wall and you
 spectate. Last player standing wins; a simultaneous elimination may draw. Ten-minute

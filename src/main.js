@@ -1,3 +1,4 @@
+import { renderBonuses } from "./bonus-ui.js";
 import { mountArena } from "./arena-ui.js";
 import { drawPaddleGear, drawShot } from "./weapon-drawing.js";
 import { drawDrop } from "./drop-drawing.js";
@@ -610,28 +611,6 @@ function draw() {
     label("↑", game.paddle.x, PADDLE_Y - 64, "#d3fa65", 25);
     label("CLICK / SPACE / TAP LAUNCH", W / 2, 500, "#d3fa65", 12);
   }
-  let x = 32;
-  if (game.vestCharges > 0) {
-    label(`VEST ${game.vestCharges}`, 32, H - 13, "#ffb570", 10, "left");
-    x = 120;
-  }
-  for (const [text, color] of [
-    [game.ammo > 0 ? `AMMO ${game.ammo}` : "", "#ffb570"],
-    [game.stickyCharges > 0 ? `STICK ${game.stickyCharges}` : "", "#b38aff"],
-  ]) {
-    if (text) {
-      label(text, x, H - 13, color, 10, "left");
-      x += text.length * 7 + 24;
-    }
-  }
-  for (const [key, value] of Object.entries(game.powers)) {
-    if (value > 0) {
-      const text = `${key.toUpperCase()} ${Math.ceil(value)}s`;
-      rect(x, H - 26, text.length * 7 + 14, 18, "#25233f");
-      label(text, x + 7, H - 13, "#a8ead5", 10, "left");
-      x += text.length * 7 + 24;
-    }
-  }
   ctx.strokeStyle = "#ff76954d";
   ctx.setLineDash([4, 7]);
   ctx.beginPath();
@@ -709,6 +688,17 @@ function frame(now) {
   $("integrity-bar").style.width = integrity + "%";
   $("pause").disabled = !["playing", "ready", "paused"].includes(game.state);
   $("mobile-pause").disabled = $("pause").disabled;
+  renderBonuses($("solo-bonuses"), {
+    wideRemainingMs: (game.powers.wide || 0) * 1000,
+    slowRemainingMs: (game.powers.slow || 0) * 1000,
+    shieldRemainingMs: (game.powers.shield || 0) * 1000,
+    shieldCharges: game.powers.shield > 0 ? 1 : 0,
+    vestCharges: game.vestCharges,
+    stickyCharges: game.stickyCharges,
+    ammo: game.ammo,
+  });
+  if (!["playing", "ready"].includes(game.state))
+    $("solo-bonuses").hidden = true;
   draw();
   requestAnimationFrame(frame);
 }

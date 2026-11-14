@@ -1621,7 +1621,8 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
 .duel-field .duel-canvas {
   margin: 0;
 }
-#duel-panel.duel-in-match #duel-field #duel-bonuses {
+#duel-panel.duel-in-match #duel-field #duel-bonuses,
+#solo-bonuses {
   position: absolute;
   z-index: 2;
   left: 8px;
@@ -1639,10 +1640,12 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
   justify-content: flex-start;
   max-height: 35%;
 }
-#duel-panel.duel-in-match #duel-field #duel-bonuses[hidden] {
+#duel-panel.duel-in-match #duel-field #duel-bonuses[hidden],
+#solo-bonuses[hidden] {
   display: none;
 }
-#duel-field .duel-bonus {
+#duel-field .duel-bonus,
+#solo-bonuses .duel-bonus {
   background: rgba(15, 19, 29, 0.3);
   border-color: rgba(190, 210, 220, 0.25);
   color: #f5ffe3;
@@ -1651,7 +1654,8 @@ body:has(#duel-panel:not([hidden])) .duel-result-card button {
   text-shadow: 0 1px 2px #000;
   opacity: 0.7;
 }
-#duel-field .duel-bonus-time {
+#duel-field .duel-bonus-time,
+#solo-bonuses .duel-bonus-time {
   height: 3px;
   opacity: 0.7;
 }

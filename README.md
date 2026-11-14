@@ -47,7 +47,7 @@ Start with three lives. Missing the last ball or catching an unprotected bomb, r
 | Slow                 | 35% slower balls for 10 seconds                                                        |
 | Shield               | Absorb one hazard hit within 15 seconds                                                |
 | Vest                 | Absorb two hazard hits; lasts until consumed, life loss, or level clear                |
-| Multiball            | Up to three balls                                                                      |
+| Multiball            | Each active ball adds two copies (1 → 3 → 9 → 27); maximum 27                          |
 | Heart                | Extra life, maximum five; +1,000 points at the cap                                     |
 | Bomb / rocket / worm | Bombs fall; rockets dive faster; worms weave sideways. An unprotected hit costs a life |
 
@@ -122,7 +122,7 @@ Sticky refills three catches. Held balls follow your paddle and automatically re
 after three seconds of active play. Tap the paddle, press Space, or use the action
 button to release all held balls and fire once; F fires without releasing. Bazooka
 adds five shots up to fifteen, with a 250ms firing cooldown. Each shot damages one brick
-or intercepts either player's hazard for +100 points. Multiball drops are replaced by gems (+500 points).
+or intercepts either player's hazard for +100 points. A shot that reaches the opponent's paddle causes one damage increment; shield, vest and invulnerability protect against it. Multiball drops are replaced by gems (+500 points).
 Play starts with two balls, one at each paddle. Returns capture a ball's ownership
 and colour for future brick points/drops. Each missed ball awards the opponent one goal
 and immediately respawns at the conceding paddle. It launches after one second or
@@ -225,3 +225,11 @@ Duel bonuses now appear as translucent, touch-through indicators inside the fiel
 so collecting/expiring powers cannot change field size. Direct pointer placements also
 resolve contact with a ball still overlapping the solid paddle body; see
 [contact/overlay follow-up](docs/DUEL_BODY_CONTACT_AND_OVERLAY.md).
+
+Solo and Duel use the same small, translucent bonus badges inside the field, including
+remaining seconds with shrinking bars and remaining armor/catches/ammo counts. They do
+not resize the field or intercept touch input. Solo multiball splits every current ball
+into three, capped at 27; a pickup at the cap awards 500 points. Duel still starts with
+two balls and replaces multiball drops with gems. Free balls in Solo, Duel and square
+arenas bounce off each other with equal-mass elastic impacts; ball ownership changes
+only on a paddle return. Held balls are excluded until released.

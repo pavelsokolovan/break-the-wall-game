@@ -124,17 +124,17 @@ test("shield pickup protects against simultaneous bomb; unshielded bomb and miss
   assert.equal(g.lives, 2);
   assert.equal(g.stats.bombs, 1);
 });
-test("multiball caps at three and a remaining ball prevents life loss", () => {
+test("multiball splits every ball repeatedly and a remaining ball prevents life loss", () => {
   const g = playing();
   g.catchDrop({ type: "multi" });
   assert.equal(g.balls.length, 3);
   g.catchDrop({ type: "multi" });
-  assert.equal(g.balls.length, 3);
-  assert.equal(g.score, 500);
+  assert.equal(g.balls.length, 9);
+  assert.equal(g.score, 0);
   g.balls[0].y = 700;
   g.update(1 / 120);
   assert.equal(g.lives, 3);
-  assert.equal(g.balls.length, 2);
+  assert.equal(g.balls.length, 8);
 });
 test("powers refresh, expire, and extra life at cap converts to score", () => {
   const g = playing();

@@ -1,3 +1,4 @@
+import { sweepBalls, resolveBallPair } from "./ball-collision.js";
 import { WEAPON_RULES, shotBounds, shotSpawnY } from "./duel-weapons.js";
 import {
   DROP_RULES,
@@ -704,6 +705,15 @@ export class DuelGame {
       }
     };
     collectExits();
+    const moving = this.state.balls
+      .filter((b) => !b.held && !gone.has(b.id))
+      .sort((a, b) => a.id - b.id);
+    for (let i = 0; i < moving.length; i++)
+      for (let k = i + 1; k < moving.length; k++) {
+        const a = moving[i],
+          b = moving[k];
+        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r) resolveBallPair(a, b);
+      }
     for (let j = 0; j < steps; j++) {
       let remaining = sub,
         elapsed = 0;
@@ -778,11 +788,50 @@ export class DuelGame {
               });
           }
         }
+        const free = this.state.balls
+          .filter((b) => !b.held && !gone.has(b.id))
+          .sort((a, b) => a.id - b.id);
+        for (let i = 0; i < free.length; i++)
+          for (let k = i + 1; k < free.length; k++) {
+            const t = sweepBalls(free[i], free[k], remaining);
+            if (t !== null)
+              consider({
+                ball: free[i],
+                other: free[k],
+                targetId: free[k].id,
+                kind: "ball_pair",
+                t,
+              });
+          }
         for (const shot of this.state.shots) {
           if (consumedShots.has(shot.id)) continue;
           const dy =
             (shot.owner === 0 ? -1 : 1) * WEAPON_RULES.shotSpeed * remaining;
           const bounds = shotBounds(shot);
+          const opponent = 1 - shot.owner,
+            p = this.state.players[opponent];
+          const pStart =
+            starts[opponent] +
+            ((p.x - starts[opponent]) * (j * sub + elapsed)) / DT;
+          const contact = sweepAabb(
+            { ...bounds, x: bounds.x - pStart },
+            -p.vx * remaining,
+            dy,
+            {
+              x: -p.width / 2,
+              y: R.paddleTopY[opponent],
+              w: p.width,
+              h: R.paddleHeight,
+            },
+          );
+          if (contact !== null)
+            consider({
+              ball: shot,
+              targetId: -8 + opponent,
+              kind: "shot_paddle",
+              slot: opponent,
+              t: contact,
+            });
           for (const brick of this.state.bricks) {
             const t = sweepAabb(bounds, 0, dy, brick);
             if (t !== null)
@@ -828,7 +877,12 @@ export class DuelGame {
         collectExits();
         if (!best) break;
         const b = best.ball;
-        if (best.kind === "shot_hazard") {
+        if (best.kind === "ball_pair") {
+          resolveBallPair(b, best.other);
+        } else if (best.kind === "shot_paddle") {
+          consumedShots.add(b.id);
+          this.applyHazard({ id: b.id, owner: best.slot });
+        } else if (best.kind === "shot_hazard") {
           consumedShots.add(b.id);
           this.state.drops = this.state.drops.filter(
             (d) => d.id !== best.drop.id,

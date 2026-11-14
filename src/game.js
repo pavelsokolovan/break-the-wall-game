@@ -1,3 +1,4 @@
+import { advanceBallPairs } from "../shared/ball-collision.js";
 import { HAZARDS, dropType } from "../shared/drops.js";
 export { HAZARDS, dropType } from "../shared/drops.js";
 import { makeLevel } from "../shared/levels.js";
@@ -5,6 +6,7 @@ export { COLORS, WALL_SHAPES, makeLevel } from "../shared/levels.js";
 import { paddleBounce } from "../shared/game-helpers.js";
 export { seeded, paddleBounce } from "../shared/game-helpers.js";
 
+export const MAX_SOLO_BALLS = 27;
 export const W = 800,
   H = 640,
   PADDLE_Y = 586;
@@ -243,24 +245,42 @@ export class Game {
         else this.score += 1000;
         break;
       case "multi": {
-        if (this.balls.length >= 3) {
-          this.score += 500;
-          break;
+        const sources = [...this.balls];
+        let added = 0;
+        for (const ball of sources) {
+          const heading =
+            Math.hypot(ball.vx, ball.vy) > 0
+              ? Math.atan2(ball.vy, ball.vx)
+              : -Math.PI / 2;
+          const speed = Math.hypot(ball.vx, ball.vy) || this.speed();
+          for (const offset of [-0.65, 0.65]) {
+            if (this.balls.length >= MAX_SOLO_BALLS) break;
+            const angle = heading + offset;
+            this.balls.push({
+              x: Math.max(
+                ball.r,
+                Math.min(
+                  W - ball.r,
+                  ball.x + Math.cos(angle) * (ball.r * 2 + 1),
+                ),
+              ),
+              y: Math.max(
+                ball.r,
+                Math.min(
+                  PADDLE_Y - ball.r - 1,
+                  ball.y + Math.sin(angle) * (ball.r * 2 + 1),
+                ),
+              ),
+              r: ball.r,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              speedReference: this.speed(),
+              trail: [],
+            });
+            added++;
+          }
         }
-        const ball = this.balls[0];
-        if (!ball) break;
-        for (const a of [-0.65, 0.65]) {
-          if (this.balls.length >= 3) break;
-          const s = this.speed();
-          this.balls.push({
-            x: ball.x,
-            y: ball.y,
-            r: 10,
-            vx: Math.sin(a) * s,
-            vy: -Math.cos(a) * s,
-            trail: [],
-          });
-        }
+        if (!added) this.score += 500;
         break;
       }
       case "rocket":
@@ -321,10 +341,23 @@ export class Game {
     this.noHit += dt;
     for (const key of Object.keys(this.powers))
       this.powers[key] = Math.max(0, this.powers[key] - dt);
-    // Microsteps bound maximum travel to four pixels, preventing brick tunneling.
-    const steps = Math.max(1, Math.ceil((this.speed() * dt) / 4)),
+    const speed = this.speed();
+    for (const b of this.balls) {
+      if (b.stuck) continue;
+      const reference = b.speedReference ?? (Math.hypot(b.vx, b.vy) || speed);
+      b.vx *= speed / reference;
+      b.vy *= speed / reference;
+      b.speedReference = speed;
+    }
+    // Total energy bounds even speeds gained by elastic ball impacts.
+    const ballTravel = Math.sqrt(
+      this.balls.reduce((sum, b) => sum + b.vx * b.vx + b.vy * b.vy, 0),
+    );
+    const steps = Math.max(1, Math.ceil((ballTravel * dt) / 4)),
       sub = dt / steps;
-    for (let j = 0; j < steps; j++)
+    for (let j = 0; j < steps; j++) {
+      const previous = new Map(this.balls.map((b) => [b, { x: b.x, y: b.y }]));
+      advanceBallPairs(this.balls, sub);
       for (const b of this.balls) {
         if (b.stuck) {
           b.offset = Math.max(
@@ -336,14 +369,8 @@ export class Game {
           b.trail = [];
           continue;
         }
-        const norm = Math.hypot(b.vx, b.vy) || 1,
-          speed = this.speed();
-        b.vx = (b.vx / norm) * speed;
-        b.vy = (b.vy / norm) * speed;
-        const px = b.x,
-          py = b.y;
-        b.x += b.vx * sub;
-        b.y += b.vy * sub;
+        const px = previous.get(b).x,
+          py = previous.get(b).y;
         if (b.x < b.r || b.x > W - b.r) {
           b.x = Math.max(b.r, Math.min(W - b.r, b.x));
           b.vx *= -1;
@@ -399,6 +426,7 @@ export class Game {
           break;
         }
       }
+    }
     this.updateShots(dt);
     if (!this.bricks.some((b) => b.hp > 0 && b.type !== "steel")) {
       const bonus =

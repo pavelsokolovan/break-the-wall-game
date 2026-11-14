@@ -59,6 +59,12 @@
                 aria-label="Brickfall Blitz game field. Move with arrows, A and D, mouse, or touch. Space launches, releases, and fires. F fires the bazooka."
                 tabindex="0"
               ></canvas>
+              <div
+                id="solo-bonuses"
+                class="duel-bonuses"
+                aria-label="Your active bonuses"
+                hidden
+              ></div>
               <div class="scanlines" aria-hidden="true"></div>
               <div id="overlay" class="overlay">
                 <div class="overlay-card">
@@ -319,7 +325,11 @@
             </li>
             <li>
               <b class="drop wide">●</b
-              ><span>MULTIBALL<small>Up to three balls</small></span>
+              ><span
+                >MULTIBALL<small
+                  >Each ball splits into three; up to 27 balls</small
+                ></span
+              >
             </li>
             <li>
               <b class="drop wide">U</b

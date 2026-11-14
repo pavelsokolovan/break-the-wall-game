@@ -1,3 +1,4 @@
+import { advanceBallPairs } from "./ball-collision.js";
 import { seeded } from "./game-helpers.js";
 export const ARENA_SIZE = 800;
 export const ARENA_FORMATIONS = ["diamond", "ring", "cross", "star", "islands"];
@@ -115,13 +116,15 @@ export class ArenaGame {
     }
     this.activeTicks++;
     for (const p of this.players) if (p.lives) p.t = p.target;
-    const survivors = [];
-    for (const b of this.balls) {
-      let gone = false;
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.vx, b.vy) / 60 / 2));
-      for (let n = 0; n < steps && !gone; n++) {
-        b.x += b.vx / (60 * steps);
-        b.y += b.vy / (60 * steps);
+    const gone = new Set();
+    const travel = Math.sqrt(
+      this.balls.reduce((sum, b) => sum + b.vx * b.vx + b.vy * b.vy, 0),
+    );
+    const steps = Math.max(1, Math.ceil(travel / 60 / 2));
+    for (let n = 0; n < steps; n++) {
+      const active = this.balls.filter((b) => !gone.has(b.id));
+      advanceBallPairs(active, 1 / (60 * steps));
+      for (const b of active) {
         for (let side = 0; side < 4; side++) {
           const player = this.players[side],
             g = geometry(side, player?.t ?? 400);
@@ -171,12 +174,12 @@ export class ArenaGame {
           }
           if (player?.lives && position < -b.r) {
             player.lives--;
-            gone = true;
+            gone.add(b.id);
             if (player.lives) this.spawnQueue.push(side);
             break;
           }
         }
-        if (gone || this.phase === "finished") break;
+        if (gone.has(b.id)) continue;
         for (const brick of this.bricks) {
           if (
             brick.dead ||
@@ -221,11 +224,10 @@ export class ArenaGame {
           break;
         }
       }
-      if (!gone && this.phase !== "finished") survivors.push(b);
     }
     this.finishIfNeeded();
     if (this.phase !== "finished") {
-      this.balls = survivors;
+      this.balls = this.balls.filter((b) => !gone.has(b.id));
       for (const slot of this.spawnQueue) this.spawn(slot);
     }
     this.spawnQueue = [];

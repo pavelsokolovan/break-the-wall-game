@@ -862,9 +862,63 @@ try {
     }
     await evaluate(a, "document.getElementById('solo-mode').click()");
   }
+  // Test-only fixture through the existing module; no production debug endpoint.
+  const soloBounds = await evaluate(
+    a,
+    "document.getElementById('game').getBoundingClientRect().toJSON()",
+  );
+  await evaluate(
+    a,
+    `(async()=>{
+    const {Game}=await import('/src/game.js');
+    const original=Game.prototype.update;
+    Game.prototype.update=function(...args){
+      Game.prototype.update=original;
+      this.state='playing';
+      this.powers={wide:12,slow:10,shield:15};this.vestCharges=2;this.stickyCharges=3;this.ammo=5;
+      this.balls=[{x:400,y:450,r:10,vx:0,vy:-360,trail:[]}];
+      window.__soloBonusFixture=this;
+      return original.apply(this,args);
+    };
+    document.getElementById('primary').click();
+  })()`,
+  );
+  await until(
+    a,
+    "!document.getElementById('solo-bonuses').hidden && document.getElementById('solo-bonuses').children.length===6",
+  );
+  assert(
+    await evaluate(
+      a,
+      "getComputedStyle(document.getElementById('solo-bonuses')).position==='absolute' && getComputedStyle(document.getElementById('solo-bonuses')).pointerEvents==='none'",
+    ),
+  );
+  assert.deepEqual(
+    await evaluate(
+      a,
+      "document.getElementById('game').getBoundingClientRect().toJSON()",
+    ),
+    soloBounds,
+    "Solo bonus badges do not resize the field",
+  );
+  await command("Page.bringToFront", {}, a);
+  const bonusShot = await command(
+    "Page.captureScreenshot",
+    { format: "png" },
+    a,
+  );
+  await writeFile(
+    "/tmp/brickfall-solo-bonuses.png",
+    Buffer.from(bonusShot.data, "base64"),
+  );
+  await evaluate(
+    a,
+    "window.__soloBonusFixture.powers={};window.__soloBonusFixture.vestCharges=0;window.__soloBonusFixture.stickyCharges=0;window.__soloBonusFixture.ammo=0;delete window.__soloBonusFixture",
+  );
+  await until(a, "document.getElementById('solo-bonuses').hidden");
   assert.deepEqual(exceptions, [], "Browser runtime exceptions");
   console.log(
-    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; nested online menu; real 3/4-page square arenas; selectable 1/2/3-bot practice; no runtime exceptions.",
+    "PASS: two Chromium pages create/join/ready/countdown/move/walls/brick points/goals/result/Solo; fixture pickups/shield/hazards/sticky/points bonus/bazooka; real F/Space/button actions; cold wake/HTML/cancel/Solo/retry; same-seat reconnect/countdown; pause/consent/panel/history/rematch/slot swap; portrait and landscape fit; single-page bot practice/pause/leave; nested online menu; real 3/4-page square arenas; selectable 1/2/3-bot practice; Solo in-field bonus badges; no runtime exceptions.",
   );
   console.log(
     "Screenshots: /tmp/brickfall-stage9-portrait.png, /tmp/brickfall-stage9-landscape.png",
